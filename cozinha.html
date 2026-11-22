@@ -370,9 +370,20 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(150%);background:var(--orange);color:#fff;font-weight:700;padding:12px 18px;border-radius:14px;z-index:60;transition:.3s;max-width:90vw;text-align:center}
 .toast.show{transform:translateX(-50%)}
 .hide{display:none!important}
+.salert{position:sticky;top:0;z-index:55;background:var(--orange);color:#fff;padding:12px 16px;box-shadow:0 6px 20px rgba(0,0,0,.4);animation:sapulse 1.3s infinite}
+.sa-h{font-weight:800;font-size:18px;letter-spacing:.02em;margin-bottom:6px}
+.sa-row{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid rgba(255,255,255,.4)}
+.sa-row .ic{font-size:24px;line-height:1.1}
+.sa-row b{display:block;font-size:17px}
+.sa-row small{display:block;font-size:13.5px;opacity:.96;margin-top:1px}
+.sa-b{display:flex;gap:10px;margin-top:8px}
+.sa-b .btn{flex:1;background:#fff;color:var(--burnt);border:2px solid #fff}
+.sa-b .btn.ghost{background:transparent;color:#fff}
+@keyframes sapulse{50%{background:var(--burnt)}}
 </style>
 </head>
 <body>
+<div class="salert hide" id="salert" role="alert"></div>
 
 <header class="top">
   <div class="wrap">
@@ -457,7 +468,7 @@ const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(
 
 /* ---------- preparos da recepção: regras por item ---------- */
 const LEADKEY="ms-kitchen-lead";
-const LEAD0={grelhar:30,croc:20,couve:60,amendoa:45,hot:10,max:4,win:30,t_grelhar:8,t_croc:4,t_couve:15,t_amendoa:5,t_hot:3};
+const LEAD0={grelhar:30,croc:20,couve:60,amendoa:45,hot:10,max:4,win:30,aviso:5,t_grelhar:8,t_croc:4,t_couve:15,t_amendoa:5,t_hot:3};
 let LEAD={...LEAD0}; try{Object.assign(LEAD,JSON.parse(ls.get(LEADKEY,"{}")))}catch(e){}
 const KORDER=["grelhar","croc","couve","amendoa","hot"];
 const INPUTS=["grelhar","croc","couve","amendoa"]; // insumos que o sushiman usa antes de montar
@@ -737,6 +748,8 @@ document.addEventListener("click",e=>{
   else if(a==="tdone"){ endRun(b.dataset.id,b.dataset.k,true); }
   else if(a==="tcancel"){ endRun(b.dataset.id,b.dataset.k,false); }
   else if(a==="tsil"){ silenced.add(b.dataset.id); tickRuns(); }
+  else if(a==="sok"){ dueStarts().forEach(g=>g.keys.forEach(k=>ack.add(k))); saveAck(); tickStart(); }
+  else if(a==="sago"){ startBeepAt=Date.now()+60000; const t=$("#prepSec"); if(t) t.scrollIntoView({behavior:"smooth",block:"start"}); }
   else if(a==="unprep"){ const k=b.dataset.k; patch(id,o=>({prep:{...(o.prep||{}),[k]:0},runs:{...(o.runs||{}),[k]:[]}})); }
   else if(a==="vdone"){
     const by={}; b.dataset.k.split(";").forEach(x=>{const [oid,i]=x.split(":"); (by[oid]=by[oid]||[]).push(+i)});
@@ -1144,7 +1157,7 @@ function ppChips(o,it,NM){
   }).join("")+`</span>`;
 }
 function buildCfg(){
-  const F=[["grelhar","Grelhar salmão: começar quantos min antes"],["croc","Fritar salmão empanado: min antes"],["couve","Couve crispy: min antes"],["amendoa","Dourar amêndoa: min antes"],["hot","Fritar hot roll / hot temaki: min antes da entrega"],["max","Máx. de rolinhos fritando ao mesmo tempo (1 rolinho = 2 porções)"],["win","Agrupar pedidos com até quantos min de diferença"],
+  const F=[["grelhar","Grelhar salmão: começar quantos min antes"],["croc","Fritar salmão empanado: min antes"],["couve","Couve crispy: min antes"],["amendoa","Dourar amêndoa: min antes"],["hot","Fritar hot roll / hot temaki: min antes da entrega"],["max","Máx. de rolinhos fritando ao mesmo tempo (1 rolinho = 2 porções)"],["win","Agrupar pedidos com até quantos min de diferença"],["aviso","Alarme: avisar quantos min antes da hora de começar"],
     ["t_grelhar","Timer: grelhar salmão (min, 0 = sem timer)"],["t_croc","Timer: fritar salmão empanado (min)"],["t_couve","Timer: assar couve crispy (min)"],["t_amendoa","Timer: dourar amêndoa (min)"],["t_hot","Timer: fritar hot roll / hot temaki (min)"]];
   $("#cfgBody").innerHTML=F.map(([k,l])=>`<label>${l}<input type="number" min="${k.startsWith("t_")?0:1}" max="240" data-lead="${k}" value="${LEAD[k]}"></label>`).join("");
 }
@@ -1164,7 +1177,40 @@ function alarmBeep(){
     });
   }catch(e){}
 }
+/* alarme: hora de começar um preparo (só na Gerência) */
+const ACKKEY="ms-kitchen-ack";
+let ack=new Set(); try{ ack=new Set(JSON.parse(ls.get(ACKKEY,"[]"))) }catch(e){}
+const saveAck=()=>ls.set(ACKKEY,JSON.stringify([...ack].slice(-300)));
+let startHtml="", startBeepAt=0, startTitle="";
+function dueStarts(){
+  const now=Date.now(), w=(+LEAD.aviso||5)*60000, by={};
+  orders.forEach(o=>{ if(o.status==="pronto") return;
+    taskRows(o).forEach(r=>{
+      if(r.pend<=0) return;
+      const at=o.dueAt-leadOf(r.k); if(now<at-w) return;
+      const key=o.id+"|"+r.k; if(ack.has(key)) return;
+      const g=by[r.k]=by[r.k]||{k:r.k,n:0,at:Infinity,keys:[],who:[]};
+      g.n+=r.pend; g.at=Math.min(g.at,at); g.keys.push(key); g.who.push(who(o));
+    });
+  });
+  return KORDER.map(k=>by[k]).filter(Boolean);
+}
+function tickStart(){
+  const el=$("#salert"); if(!el) return;
+  const list=mode==="recepcao"?dueStarts():[], now=Date.now();
+  const html=list.map(g=>{
+    const P=PREP[g.k], late=g.at<=now;
+    return `<div class="sa-row"><span class="ic">${P.ico}</span><div><b>${P.t}: ${g.k==="hot"?qtyTxt("hot",g.n):g.n+" un"}</b><small>${g.who.join(", ")} · ${late?"comece agora (era para "+hhmm(g.at)+")":"comece até "+hhmm(g.at)}</small></div></div>`;
+  }).join("");
+  const full=list.length?`<div class="sa-h">⏰ Hora de começar</div>${html}<div class="sa-b"><button class="btn" data-act="sago">Ver o que fazer</button><button class="btn ghost" data-act="sok">Entendi</button></div>`:"";
+  if(full!==startHtml){ if(!startHtml&&full) startBeepAt=0; startHtml=full; el.innerHTML=full; el.classList.toggle("hide",!full) }
+  if(list.length){
+    startTitle="⏰ Hora de começar: "+PREP[list[0].k].t;
+    if(now>=startBeepAt){ startBeepAt=now+8000; alarmBeep(); try{navigator.vibrate&&navigator.vibrate([250,120,250])}catch(e){} }
+  }else startTitle="";
+}
 function tickRuns(){
+  tickStart();
   const now=Date.now(); let ring=null;
   allRuns().forEach(r=>{ if(r.dur>0&&now-r.t0>=r.dur*60000&&!silenced.has(r.id)&&!ring) ring=r });
   document.querySelectorAll(".rt").forEach(e=>{
@@ -1181,7 +1227,8 @@ function tickRuns(){
   if(ring){
     if(now-lastAlarm>=3500){ lastAlarm=now; alarmBeep(); try{navigator.vibrate&&navigator.vibrate([250,120,250])}catch(e){} }
     document.title="⏰ Retire: "+PREP[ring.k].t;
-  }else if(document.title!==titleBase) document.title=titleBase;
+  }else if(startTitle){ if(document.title!==startTitle) document.title=startTitle }
+  else if(document.title!==titleBase) document.title=titleBase;
 }
 setInterval(tickRuns,1000);
 
