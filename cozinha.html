@@ -433,9 +433,12 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
   </section>
 </main>
 <div class="keys hide" id="keys"><span><kbd>Espaço</kbd>marca o item · depois conclui e vai ao próximo</span><span><kbd>Enter</kbd>conclui o pedido inteiro</span><span><kbd>⌫</kbd>desfaz</span></div>
-<div class="lock hide" id="lock"><form id="lockF"><h3>🔒 Cozinha · Márcio Sushi</h3><p>Digite a senha para abrir os pedidos.</p><input id="lockPw" type="password" autocomplete="current-password" placeholder="Senha"><div class="err" id="lockErr"></div><button>Entrar</button></form></div>
+<div class="lock hide" id="lock"><form id="lockF"><h3>🔒 Cozinha · Márcio Sushi</h3><p id="lockMsg">Digite a senha para abrir os pedidos.</p><input id="lockEm" type="email" autocomplete="username" placeholder="E-mail" style="display:none"><input id="lockPw" type="password" autocomplete="current-password" placeholder="Senha"><div class="err" id="lockErr"></div><button>Entrar</button></form></div>
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script>
 const KEY="ms-kitchen-orders", MODEKEY="ms-kitchen-mode";
 const CATS=[["Uramaki","Uramakis"],["Hossomaki","Hossomakis"],["Hot Roll","Hot Rolls"],["Joy","Joy"],["Niguiri","Niguiri"],["Temaki","Temakis"],["Sashimi","Sashimi"]];
@@ -502,29 +505,72 @@ const Local={
 };
 orders=Local.load();
 const queue={};
-function enqueue(id,fn){queue[id]=(queue[id]||Promise.resolve()).then(fn).catch(onErr)}
+let fbMode=false;
+function enqueue(id,fn){ if(fbMode){ try{ Promise.resolve(fn()).catch(onErr) }catch(e){ onErr(e) } return } queue[id]=(queue[id]||Promise.resolve()).then(fn).catch(onErr) }
 function onErr(e){
   const c=e&&e.code;
-  toast(c==="invalid_argument"?"Sem permissão para alterar. Peça acesso de Contribuidor.":"Não foi possível salvar. Tente de novo.");
+  toast(c==="invalid_argument"?"Sem permissão para alterar. Peça acesso de Contribuidor.":c==="permission-denied"?"Sem permissão. Entre de novo com o e-mail da cozinha ou confira as regras do banco.":"Não foi possível salvar. Tente de novo.");
   console.warn(e);
 }
 function persistSet(o){ if(srv) return srvOp("set",{id:o.id,order:o}); if(shared) return enqueue(o.id,()=>dbRef.collection("orders").doc(o.id).set(o)); Local.save(); }
 function persistUpdate(id,patch){ if(srv) return srvOp("patch",{id,patch}); if(shared) return enqueue(id,()=>dbRef.collection("orders").doc(id).update(patch)); Local.save(); }
 function persistDelete(id){ if(srv) return srvOp("del",{id}); if(shared) return enqueue(id,()=>dbRef.collection("orders").doc(id).delete()); Local.save(); }
 
+function attachDb(db){
+  dbRef=db; shared=true;
+  return db.collection("orders").onSnapshot(snap=>{
+    orders=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(seen===null||!shared_first){seen=new Set(orders.map(o=>o.id));shared_first=true}
+    setSync(true); render();
+  },e=>{setSync(false);onErr(e)});
+}
 (async()=>{
   try{
     if(!(window.claude&&claude.use)) return;
     const db=await Promise.race([claude.use("db"),new Promise(r=>setTimeout(()=>r(null),10000))]);
     if(!db) return;
-    dbRef=db; shared=true;
-    db.collection("orders").onSnapshot(snap=>{
-      orders=snap.docs.map(d=>({id:d.id,...d.data()}));
-      if(seen===null||!shared_first){seen=new Set(orders.map(o=>o.id));shared_first=true}
-      setSync(true); render();
-    },e=>{shared=false;setSync(false);onErr(e)});
+    attachDb(db);
   }catch(e){console.warn(e)}
 })();
+
+/* ---------- Firebase (site no GitHub Pages): login por e-mail/senha + banco em tempo real ---------- */
+const FIREBASE_CFG={
+  apiKey:"AIzaSyB0sir3zcUGjnuVbs-3zHmYHP3KVgRo4k0",
+  authDomain:"marciosushi.firebaseapp.com",
+  projectId:"marciosushi",
+  storageBucket:"marciosushi.firebasestorage.app",
+  messagingSenderId:"1007452357990",
+  appId:"1:1007452357990:web:13e3217bf6bfa1affe74a7"
+};
+let fbAuth=null, fbUnsubs=[];
+function fbStop(){ fbUnsubs.forEach(u=>{try{u()}catch(e){}}); fbUnsubs=[]; shared=false; fbMode=false; orders=[]; seen=null; shared_first=false; render() }
+function fbStart(){
+  fbStop(); fbMode=true; $("#lock").classList.add("hide");
+  fbUnsubs.push(attachDb(dbRef));
+  fbUnsubs.push(dbRef.collection("settings").doc("lead").onSnapshot(d=>{
+    if(d.exists){ Object.assign(LEAD,d.data()); ls.set(LEADKEY,JSON.stringify(LEAD)); render() }
+  },()=>{}));
+}
+function fbLogin(){
+  $("#lockEm").style.display=""; $("#lockMsg").textContent="Entre com o e-mail e a senha da cozinha.";
+  $("#lock").classList.remove("hide"); $("#lockErr").textContent="";
+  setTimeout(()=>($("#lockEm").value?$("#lockPw"):$("#lockEm")).focus(),50);
+}
+async function fbInit(){
+  if(!(window.firebase&&firebase.initializeApp&&firebase.auth&&firebase.firestore)) return false;
+  try{
+    firebase.initializeApp(FIREBASE_CFG);
+    fbAuth=firebase.auth();
+    const fs=firebase.firestore();
+    try{ fs.settings({ignoreUndefinedProperties:true}) }catch(e){}
+    try{ await fs.enablePersistence({synchronizeTabs:true}) }catch(e){}
+    dbRef=fs; fbMode=true; orders=[]; render();
+    fbAuth.onAuthStateChanged(u=>{ if(u) fbStart(); else { fbStop(); fbLogin() } });
+    window.addEventListener("offline",()=>{ $("#dot").className="dot"; $("#sync").textContent="Sem internet · as alterações serão enviadas quando voltar" });
+    window.addEventListener("online",()=>{ if(shared) setSync(true) });
+    return true;
+  }catch(e){ console.warn(e); return false }
+}
 function setSync(ok){
   $("#dot").className="dot"+(ok?" ok":"");
   $("#sync").textContent=ok?"Sincronizado entre aparelhos":"Modo local · só neste aparelho";
@@ -576,6 +622,16 @@ async function srvPoll(force){
 function askPw(){ $("#lock").classList.remove("hide"); $("#lockPw").value=""; setTimeout(()=>$("#lockPw").focus(),50) }
 $("#lockF").addEventListener("submit",async e=>{
   e.preventDefault(); $("#lockErr").textContent="";
+  if(fbAuth){
+    try{ await fbAuth.signInWithEmailAndPassword($("#lockEm").value.trim(),$("#lockPw").value); $("#lockPw").value="" }
+    catch(er){
+      const c=er&&er.code||"";
+      $("#lockErr").textContent = /invalid-credential|wrong-password|user-not-found|invalid-email|missing/.test(c) ? "E-mail ou senha incorretos."
+        : /too-many/.test(c) ? "Muitas tentativas. Aguarde um pouco e tente de novo."
+        : /network/.test(c) ? "Sem conexão com a internet." : "Não foi possível entrar. Tente de novo.";
+    }
+    return;
+  }
   ls.set(PWKEY,$("#lockPw").value);
   try{ await srvFetch("login",{}); $("#lock").classList.add("hide"); srvPoll(true) }
   catch(er){ $("#lockErr").textContent=er.auth?"Senha incorreta.":"Sem conexão. Tente de novo."; if(er.auth) $("#lockPw").select() }
@@ -677,7 +733,7 @@ document.addEventListener("click",e=>{
 $("#cfgBody").addEventListener("change",e=>{
   const i=e.target.closest("[data-lead]"); if(!i) return;
   const isT=i.dataset.lead.startsWith("t_"), n=parseInt(i.value,10), v=Math.max(isT?0:1,Math.min(240,isNaN(n)?LEAD0[i.dataset.lead]:n)); i.value=v;
-  LEAD[i.dataset.lead]=v; ls.set(LEADKEY,JSON.stringify(LEAD)); if(srv) srvOp("cfg",{cfg:LEAD}); render();
+  LEAD[i.dataset.lead]=v; ls.set(LEADKEY,JSON.stringify(LEAD)); if(srv) srvOp("cfg",{cfg:LEAD}); if(fbMode&&shared&&dbRef) dbRef.collection("settings").doc("lead").set({...LEAD}).catch(onErr); render();
 });
 $("#pvtPrep").addEventListener("click",e=>{const b=e.target.closest("[data-pv]"); if(!b) return; prepView=b.dataset.pv; ls.set("ms-kitchen-pview",prepView); render();});
 $("#sviewBar").addEventListener("click",e=>{const b=e.target.closest("[data-sv]"); if(!b) return; sview=b.dataset.sv; ls.set("ms-kitchen-sview",sview); window.scrollTo(0,0); render();});
@@ -1135,7 +1191,7 @@ setInterval(()=>{ if(!document.hidden) render() },30000);
 buildCfg();
 syncReady();
 render();
-srvInit();
+if(!(window.claude&&claude.use)){ fbInit().then(ok=>{ if(!ok) srvInit() }) }
 </script>
 </body>
 </html>
