@@ -306,6 +306,12 @@ details.prod summary span{font-weight:500;color:var(--muted);font-size:13px}
 .bh{display:flex;align-items:center;gap:12px}
 .bh small{display:block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#b2420f;font-weight:700;margin-bottom:3px}
 .bh h3{font-size:24px;font-weight:700;line-height:1.1}
+.bh h3 .ty{color:#b2420f}
+.bh small.mb{margin:4px 0 0}
+body.sm .cat{font-size:20px;letter-spacing:.02em;text-transform:none;margin:16px 0 2px}
+body.ks.sm .cat{font-size:30px;margin:18px 0 4px}
+body.sm .prodcat h4{font-size:16px;letter-spacing:.04em}
+body.ks.sm .prodcat h4{font-size:21px}
 .bn{margin-left:auto;text-align:right;font-family:var(--serif);font-size:46px;font-weight:600;line-height:1;color:var(--burnt)}
 .bn small{display:block;font-family:var(--sans);font-size:12px;letter-spacing:.12em;color:#6b6966;text-transform:uppercase;margin:4px 0 0}
 .bnote{font-size:13.5px;color:#6b6966;margin:8px 0 2px}
@@ -830,9 +836,9 @@ function baseView(act){
     const vs=g.vs, multi=vs.length>1, hasEsp=vs.some(v=>v.esp);
     const div=(nOk&&nWait)?(gi===0?`<div class="bdiv ok">✅ Pode fazer agora · ingredientes prontos</div>`:(gi===nOk?`<div class="bdiv">⏳ Depois · esperam a Gerência preparar (grelhar, fritar, couve, amêndoa)</div>`:"")):"";
     const big=g.pcs?g.pcs:g.q, unit=g.pcs?(g.pcs===1?"peça":"peças"):"un";
-    return div+`<section class="bc${g.rank?" wait":""}"><div class="bh"><div><small>${esc(g.cat)}${multi?" · mesma base":""}</small><h3>${esc(g.base)}</h3></div><div class="bn">${big}<small>${unit}</small></div></div>
+    return div+`<section class="bc${g.rank?" wait":""}"><div class="bh"><div><h3>${typeOf(g.cat)?`<span class="ty">${esc(typeOf(g.cat))}</span> `:""}${esc(g.base)}</h3>${multi?`<small class="mb">mesma base</small>`:""}</div><div class="bn">${big}<small>${unit}</small></div></div>
       ${multi?`<div class="bnote">Faça a base de ${g.pcs} peças de uma vez e depois finalize cada versão.</div>`:""}
-      ${vs.map(v=>`<div class="vr"><div><div class="vn"><b>${v.pcs?v.pcs+" "+(v.pcs===1?"peça":"peças"):v.q+"×"}</b> · ${esc(v.nome)}</div>
+      ${vs.map(v=>`<div class="vr"><div><div class="vn"><b>${v.pcs?v.pcs+" "+(v.pcs===1?"peça":"peças"):v.q+"×"}</b> · ${esc((typeOf(g.cat)?typeOf(g.cat)+" ":"")+v.nome)}</div>
         <small>${v.topo?esc(v.topo):(hasEsp?"sem cobertura extra":"")}</small>
         ${v.wait.length?`<small class="wt">⏳ ${v.wait.map(k=>PREP[k].chip[0]).join(" · ")}</small>`:""}
         <small>${v.parts.map(x=>`${who(x.o)} ${x.q>1?"×"+x.q+" ":""}${x.from?"· "+esc(x.from)+" ":""}· ${hhmm(x.o.dueAt)}`).join(" &nbsp;|&nbsp; ")}</small></div>
@@ -847,6 +853,7 @@ function baseView(act){
 /* ---------- sushiman: pedido atual + teclado ---------- */
 const activeList=()=>orders.filter(o=>o.status!=="pronto").sort((a,b)=>a.dueAt-b.dueAt||a.createdAt-b.createdAt);
 const curOrder=()=>{const a=activeList();return a.find(o=>o.id===focusId)||a[0]||null};
+const typeOf=cat=>{const c=CATS.find(x=>x[1]===cat);return c?c[0]:""};
 const fullName=it=>{const c=CATS.find(x=>x[1]===it.cat);return c?c[0]+" "+it.nome:it.nome};
 function displayGroups(o){
   const cb={}, cbOrder=[], av={};
@@ -974,11 +981,12 @@ function render(){
   const pain=mode==="painel", dsk=mode==="sushiman"&&desk.matches, sv=mode==="sushiman"&&sview==="preparo", kan=dsk&&!sv;
   document.body.classList.toggle("k",(mode!=="recepcao")&&desk.matches);
   document.body.classList.toggle("ks",dsk);
+  document.body.classList.toggle("sm",mode==="sushiman");
   if(dsk!==wasKs){wasKs=dsk;$("#prod").open=!dsk}
   $("#sviewBar").classList.toggle("hide",mode!=="sushiman");
   document.querySelectorAll("[data-sv]").forEach(b=>b.classList.toggle("on",b.dataset.sv===sview));
   $("#prepView").classList.toggle("hide",!sv);
-  tickClock();
+  tickClock(); tickStart();
   $("#snd").classList.toggle("hide",mode!=="sushiman");
   $("#snd").classList.toggle("on",audioOn);
   $("#snd").textContent=audioOn?"🔔 Aviso sonoro: ligado":"🔔 Aviso sonoro: desligado";
