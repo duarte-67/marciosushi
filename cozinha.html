@@ -670,6 +670,7 @@ const COMBOS={
 function mkItem(q,nome,un,from,fq){
   let cat="Outros", disp=nome;
   for(const [p,label] of CATS){ if(nome.toLowerCase().startsWith(p.toLowerCase()+" ")){cat=label;disp=nome.slice(p.length).trim();break} }
+  if(/^hot temaki$/i.test(nome)){cat="Temakis";disp="Hot Temaki"}
   const it={q,nome:disp,cat,un,done:false}; if(from){it.from=from; if(fq) it.fq=fq} return it;
 }
 function parseOrder(raw){
@@ -986,6 +987,10 @@ function needMap(o,pendOnly){
 const prepDone=(o,k)=>((o.prep&&o.prep[k])||0);
 const runsOf=(o,k)=>((o.runs&&o.runs[k])||[]);
 const unitOf=k=>k==="hot"?"porç.":"un";
+/* fritura: 1 rolinho = 10 peças = 2 porções (hot roll de 5 un ou hot temaki). A contagem interna segue em porções. */
+const ROL=2, rolOf=p=>Math.ceil(p/ROL), rolWord=n=>n===1?"rolinho":"rolinhos";
+const rolTxt=p=>`${rolOf(p)} ${rolWord(rolOf(p))}`, capP=()=>LEAD.max*ROL;
+const qtyTxt=(k,n)=>k==="hot"?`${rolTxt(n)} (${n} porç.)`:`${n} ${unitOf(k)}`;
 function taskRows(o){
   const {m,nm}=needMap(o,true), rows=[];
   KORDER.forEach(k=>{
@@ -996,7 +1001,7 @@ function taskRows(o){
   return rows;
 }
 const fryingNow=()=>orders.reduce((a,o)=>o.status==="pronto"?a:a+runsOf(o,"hot").reduce((s,r)=>s+r.n,0),0);
-const fryFree=()=>Math.max(0,LEAD.max-fryingNow());
+const fryFree=()=>Math.max(0,capP()-fryingNow());
 function allRuns(){
   const g={};
   orders.forEach(o=>{ if(o.status==="pronto") return;
@@ -1027,7 +1032,7 @@ function hotBatches(pend){
   const bs=[];
   ps.forEach(r=>{
     const b=bs[bs.length-1];
-    if(b&&b.n<LEAD.max&&r.o.dueAt-b.first<=LEAD.win*60000){b.n++;(b.m[r.o.id]=b.m[r.o.id]||{r,c:0}).c++}
+    if(b&&b.n<capP()&&r.o.dueAt-b.first<=LEAD.win*60000){b.n++;(b.m[r.o.id]=b.m[r.o.id]||{r,c:0}).c++}
     else bs.push({first:r.o.dueAt,n:1,m:{[r.o.id]:{r,c:1}}});
   });
   return bs;
@@ -1049,7 +1054,7 @@ const durTxt=k=>{const d=+LEAD["t_"+k]||0;return d>0?` · timer ${d} min`:""};
 /* bloco "em andamento" com cronômetro */
 function runBlock(r){
   const P=PREP[r.k];
-  return `<div class="run" data-rid="${r.id}"><div class="rh"><span class="ic">${P.ico}</span><b>${P.t} · ${r.n} ${unitOf(r.k)}</b>${rtEl(r.id,r.t0,r.dur)}</div>
+  return `<div class="run" data-rid="${r.id}"><div class="rh"><span class="ic">${P.ico}</span><b>${P.t} · ${qtyTxt(r.k,r.n)}</b>${rtEl(r.id,r.t0,r.dur)}</div>
     <div class="rp">${r.parts.map(x=>`${who(x.o)} · ${x.n}`).join(" &nbsp;|&nbsp; ")}</div>
     ${r.dur>0?`<div class="rbar"><i></i></div><div class="readymsg">⏰ Tempo acabou · retire e conclua</div>`:`<div class="rp">Sem timer · cronômetro contando</div>`}
     <div class="racts"><button class="btn" data-act="tdone" data-id="${r.id}" data-k="${r.k}">Concluir ✓</button><button class="btn ghost sil" data-act="tsil" data-id="${r.id}">🔕 Silenciar</button><button class="btn ghost" data-act="tcancel" data-id="${r.id}" data-k="${r.k}">Cancelar</button></div></div>`;
@@ -1058,11 +1063,11 @@ function runBlock(r){
 /* controles de uma tarefa (linha de pedido) */
 function taskCtl(r){
   let h="";
-  r.runs.forEach(x=>{ h+=`<div class="tw">⏱ em andamento ${x.n} ${unitOf(r.k)} · ${rtEl(x.id,x.t0,x.dur)}</div>`; });
+  r.runs.forEach(x=>{ h+=`<div class="tw">⏱ em andamento ${qtyTxt(r.k,x.n)} · ${rtEl(x.id,x.t0,x.dur)}</div>`; });
   if(r.pend>0){
     const n=r.k==="hot"?Math.min(r.pend,fryFree()):r.pend;
-    h+=n>0?`<button class="btn" data-act="tstart" data-o="${r.o.id}" data-k="${r.k}">Iniciar${n<r.pend?` ${n} de ${r.pend}`:""}</button>`
-          :`<span class="tw late">Fritadeira cheia ${fryingNow()}/${LEAD.max}</span>`;
+    h+=n>0?`<button class="btn" data-act="tstart" data-o="${r.o.id}" data-k="${r.k}">Iniciar${n<r.pend?` ${n} de ${r.pend} porç.`:""}</button>`
+          :`<span class="tw late">Fritadeira cheia ${rolOf(fryingNow())}/${LEAD.max} rolinhos</span>`;
   }
   if(r.done>=r.need&&!r.run) h+=`<span class="tw okk">✓ Concluído</span>`;
   if(r.done>0||r.run>0) h+=`<button class="btn ghost sm" data-act="unprep" data-o="${r.o.id}" data-k="${r.k}">Desfazer</button>`;
@@ -1074,7 +1079,7 @@ function orderTaskCard(o,rows){
   return `<article class="oc ${cls}${all?" alldone":""}"><div class="och"><span class="num">#${o.n}</span><div class="nm">${esc(o.cliente||"Cliente")}<small>${esc(o.modo||"")}</small></div>
     <div class="vt"><div class="hr">${hhmm(o.dueAt)}</div><div class="when ${cls}">${d>0?"em "+fmtMin(d):"atrasado "+fmtMin(-d)}</div></div></div>
     ${rows.map(r=>`<div class="trow${r.run?" wip":""}${r.done>=r.need&&!r.run?" dn":""}"><span class="ic">${PREP[r.k].ico}</span>
-      <div class="tx"><b>${PREP[r.k].t}</b> <span class="pcs"><i>${r.need}</i> ${unitOf(r.k)}</span><small>${esc(r.names.join(", "))}${r.pend>0?` · começar até ${hhmm(o.dueAt-leadOf(r.k))}`:""}${durTxt(r.k)}</small></div>
+      <div class="tx"><b>${PREP[r.k].t}</b> <span class="pcs"><i>${r.k==="hot"?rolOf(r.need):r.need}</i> ${r.k==="hot"?rolWord(rolOf(r.need)):unitOf(r.k)}</span><small>${r.k==="hot"?`${r.need} porç. · `:""}${esc(r.names.join(", "))}${r.pend>0?` · começar até ${hhmm(o.dueAt-leadOf(r.k))}`:""}${durTxt(r.k)}</small></div>
       <div class="ts">${taskCtl(r)}</div></div>`).join("")}
   </article>`;
 }
@@ -1085,15 +1090,16 @@ function prepCard(k,rows){
   const tot=pend.reduce((a,r)=>a+r.pend,0);
   const startBy=pend.length?pend[0].o.dueAt-leadOf(k):0;
   const w=pend.length?whenInfo(startBy,false):(wip.length?{cls:"ok",txt:"⏱ em andamento"}:{cls:"ok",txt:"✓ tudo pronto"});
-  let body="", rec="";
+  let body="", rec="", hotRol=0;
   if(k==="hot"){
     const bs=hotBatches(pend);
-    rec=pend.length?`Frite ${tot} porç. (hot roll / hot temaki) em ${bs.length} lote${bs.length>1?"s":""} (máx. ${LEAD.max} por vez)`:"";
+    hotRol=bs.reduce((a,b)=>a+rolOf(b.n),0);
+    rec=pend.length?`Frite ${hotRol} ${rolWord(hotRol)} (${tot} porç. de hot roll / hot temaki) em ${bs.length} lote${bs.length>1?"s":""} (máx. ${LEAD.max} rolinhos por vez)`:"";
     body=bs.map((b,i)=>{
       const at=b.first-leadOf("hot"), wi=whenInfo(at,false), ids=Object.values(b.m), blocked=b.n>fryFree();
-      return `<div class="lote ${wi.cls}"><div class="lh"><b>Lote ${i+1} · fritar às ${hhmm(at)}</b><span class="when ${wi.cls}">${wi.cls==="late"?"agora":"em "+fmtMin(Math.round((at-Date.now())/60000))}</span><span class="cap${b.n>=LEAD.max?" full":""}">${b.n}/${LEAD.max}</span></div>`
+      return `<div class="lote ${wi.cls}"><div class="lh"><b>Lote ${i+1} · ${rolTxt(b.n)} · fritar às ${hhmm(at)}</b><span class="when ${wi.cls}">${wi.cls==="late"?"agora":"em "+fmtMin(Math.round((at-Date.now())/60000))}</span><span class="cap${b.n>=capP()?" full":""}">${rolOf(b.n)}/${LEAD.max} rolinhos</span></div>`
         +ids.map(x=>`<div class="ln"><b>${who(x.r.o)}</b> · ${x.c} porç. <small>${esc(x.r.names.join(", "))} · entrega ${hhmm(x.r.o.dueAt)}</small></div>`).join("")
-        +(blocked?`<button class="btn" disabled>Fritadeira ocupada ${fryingNow()}/${LEAD.max}</button>`
+        +(blocked?`<button class="btn" disabled>Fritadeira ocupada ${rolOf(fryingNow())}/${LEAD.max} rolinhos</button>`
                  :`<button class="btn" data-act="gstart" data-k="hot" data-s="${ids.map(x=>x.r.o.id+":"+x.c).join(";")}">Iniciar lote${durTxt("hot")}</button>`)+`</div>`;
     }).join("");
   }else{
@@ -1108,7 +1114,7 @@ function prepCard(k,rows){
   }
   body+=wip.map(r=>`<div class="prow"><div class="nm"><b>⏱ ${who(r.o)} · em andamento</b><small>${esc(r.names.join(", "))}</small></div><div class="ts">${r.runs.map(x=>rtEl(x.id,x.t0,x.dur)).join("")}</div></div>`).join("");
   body+=dn.map(r=>`<div class="prow dn"><div class="nm"><b>✓ ${who(r.o)} · feito</b><small>${esc(r.names.join(", "))}</small></div><button class="btn ghost" data-act="unprep" data-o="${r.o.id}" data-k="${k}">Desfazer</button></div>`).join("");
-  return {startBy:pend.length?startBy:Infinity,html:`<section class="pc ${w.cls}"><h3><span class="ic">${P.ico}</span>${P.t}${pend.length?`<span class="big">${tot}<small>${unitOf(k)}</small></span>`:""}</h3>
+  return {startBy:pend.length?startBy:Infinity,html:`<section class="pc ${w.cls}"><h3><span class="ic">${P.ico}</span>${P.t}${pend.length?`<span class="big">${k==="hot"?hotRol:tot}<small>${k==="hot"?rolWord(hotRol):unitOf(k)}</small></span>`:""}</h3>
     ${rec?`<div class="rec">${rec}</div>`:""}<div class="when ${w.cls}">${w.txt}</div><div class="note">${P.why}</div>${body}</section>`};
 }
 let prepView=ls.get("ms-kitchen-pview","pedido");
@@ -1138,7 +1144,7 @@ function ppChips(o,it,NM){
   }).join("")+`</span>`;
 }
 function buildCfg(){
-  const F=[["grelhar","Grelhar salmão: começar quantos min antes"],["croc","Fritar salmão empanado: min antes"],["couve","Couve crispy: min antes"],["amendoa","Dourar amêndoa: min antes"],["hot","Fritar hot roll / hot temaki: min antes da entrega"],["max","Máx. de itens fritando ao mesmo tempo"],["win","Agrupar pedidos com até quantos min de diferença"],
+  const F=[["grelhar","Grelhar salmão: começar quantos min antes"],["croc","Fritar salmão empanado: min antes"],["couve","Couve crispy: min antes"],["amendoa","Dourar amêndoa: min antes"],["hot","Fritar hot roll / hot temaki: min antes da entrega"],["max","Máx. de rolinhos fritando ao mesmo tempo (1 rolinho = 2 porções)"],["win","Agrupar pedidos com até quantos min de diferença"],
     ["t_grelhar","Timer: grelhar salmão (min, 0 = sem timer)"],["t_croc","Timer: fritar salmão empanado (min)"],["t_couve","Timer: assar couve crispy (min)"],["t_amendoa","Timer: dourar amêndoa (min)"],["t_hot","Timer: fritar hot roll / hot temaki (min)"]];
   $("#cfgBody").innerHTML=F.map(([k,l])=>`<label>${l}<input type="number" min="${k.startsWith("t_")?0:1}" max="240" data-lead="${k}" value="${LEAD[k]}"></label>`).join("");
 }
