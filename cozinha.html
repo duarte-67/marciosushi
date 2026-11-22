@@ -308,6 +308,11 @@ details.prod summary span{font-weight:500;color:var(--muted);font-size:13px}
 .vr .vn b{color:var(--burnt)}
 .vr small{display:block;color:#6b6966;font-size:13px;margin-top:3px}
 .vr .btn{padding:12px 18px;font-size:15px}
+.vr .wt{color:var(--burnt);font-weight:700}
+.bc.wait{opacity:.92;border-top-color:#b9a48f}
+.bdiv{grid-column:1/-1;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:13px;color:var(--muted);padding:10px 4px 0}
+.bdiv.ok{color:#5dd68a}
+body.ks .bdiv{font-size:19px}
 body.ks #sviewBar button{font-size:18px;padding:12px 26px}
 body.ks .bsum{font-size:20px}
 body.ks .bc{padding:20px 24px;border-radius:28px}
@@ -797,25 +802,32 @@ function baseOf(it){
   return {base:n,topo:"",esp:false};
 }
 function baseView(act){
-  const B={};
+  const B={}, NMc={};
+  /* insumos que a Gerência ainda não deixou prontos (grelhado, croc, couve, amêndoa) */
+  const waitOf=(o,it)=>{ const ks=kindsOf(it).filter(k=>INPUTS.includes(k)); if(!ks.length) return []; const m=(NMc[o.id]=NMc[o.id]||needMap(o,false).m); return ks.filter(k=>prepDone(o,k)<(m[k]||0)) };
   act.forEach(o=>o.items.forEach((it,i)=>{
     if(it.done) return;
-    const {base,topo,esp}=baseOf(it), key=it.cat+"|"+norm(base);
+    const {base,topo,esp}=baseOf(it), key=it.cat+"|"+norm(base), w=waitOf(o,it);
     const g=B[key]=B[key]||{cat:it.cat,base,first:o.dueAt,pcs:0,q:0,vars:{}};
     g.first=Math.min(g.first,o.dueAt);
-    const v=g.vars[it.nome]=g.vars[it.nome]||{nome:it.nome,topo,esp,pcs:0,q:0,parts:[],keys:[]};
+    const vk=it.nome+(w.length?"|w":""), v=g.vars[vk]=g.vars[vk]||{nome:it.nome,topo,esp,pcs:0,q:0,parts:[],keys:[],wait:[]};
+    w.forEach(k=>{ if(!v.wait.includes(k)) v.wait.push(k) });
     const p=pcsOf(it); g.pcs+=p; g.q+=it.q; v.pcs+=p; v.q+=it.q; v.parts.push({o,q:it.q,from:it.from}); v.keys.push(o.id+":"+i);
   }));
-  const gs=Object.values(B).sort((a,b)=>a.first-b.first);
+  Object.values(B).forEach(g=>{ g.vs=Object.values(g.vars).sort((a,b)=>(a.wait.length>0)-(b.wait.length>0)||b.q-a.q); g.rank=g.vs.some(v=>!v.wait.length)?0:1 });
+  const gs=Object.values(B).sort((a,b)=>a.rank-b.rank||a.first-b.first);
+  const nOk=gs.filter(g=>g.rank===0).length, nWait=gs.length-nOk;
   const ready=orders.filter(o=>o.status!=="pronto"&&o.items.length&&o.items.every(i=>i.done));
   const totalPcs=gs.reduce((a,g)=>a+g.pcs,0);
-  let h=gs.map(g=>{
-    const vs=Object.values(g.vars).sort((a,b)=>b.q-a.q), multi=vs.length>1, hasEsp=vs.some(v=>v.esp);
+  let h=gs.map((g,gi)=>{
+    const vs=g.vs, multi=vs.length>1, hasEsp=vs.some(v=>v.esp);
+    const div=(nOk&&nWait)?(gi===0?`<div class="bdiv ok">✅ Pode fazer agora · ingredientes prontos</div>`:(gi===nOk?`<div class="bdiv">⏳ Depois · esperam a Gerência preparar (grelhar, fritar, couve, amêndoa)</div>`:"")):"";
     const big=g.pcs?g.pcs:g.q, unit=g.pcs?(g.pcs===1?"peça":"peças"):"un";
-    return `<section class="bc"><div class="bh"><div><small>${esc(g.cat)}${multi?" · mesma base":""}</small><h3>${esc(g.base)}</h3></div><div class="bn">${big}<small>${unit}</small></div></div>
+    return div+`<section class="bc${g.rank?" wait":""}"><div class="bh"><div><small>${esc(g.cat)}${multi?" · mesma base":""}</small><h3>${esc(g.base)}</h3></div><div class="bn">${big}<small>${unit}</small></div></div>
       ${multi?`<div class="bnote">Faça a base de ${g.pcs} peças de uma vez e depois finalize cada versão.</div>`:""}
       ${vs.map(v=>`<div class="vr"><div><div class="vn"><b>${v.pcs?v.pcs+" "+(v.pcs===1?"peça":"peças"):v.q+"×"}</b> · ${esc(v.nome)}</div>
         <small>${v.topo?esc(v.topo):(hasEsp?"sem cobertura extra":"")}</small>
+        ${v.wait.length?`<small class="wt">⏳ ${v.wait.map(k=>PREP[k].chip[0]).join(" · ")}</small>`:""}
         <small>${v.parts.map(x=>`${who(x.o)} ${x.q>1?"×"+x.q+" ":""}${x.from?"· "+esc(x.from)+" ":""}· ${hhmm(x.o.dueAt)}`).join(" &nbsp;|&nbsp; ")}</small></div>
         <button class="btn" data-act="vdone" data-k="${v.keys.join(";")}">Feito ✓</button></div>`).join("")}
     </section>`;
