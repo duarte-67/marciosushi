@@ -115,6 +115,13 @@ body.ks .mini .btn{font-size:17px;padding:12px 16px}
 .card{scroll-margin-top:150px}
 .card.cur{outline:4px solid var(--orange);outline-offset:4px;box-shadow:0 0 0 10px rgba(240,90,30,.16),0 14px 30px -18px #000}
 .ch[data-act=focus]{cursor:pointer}
+.cmb{display:flex;justify-content:space-between;align-items:baseline;gap:10px;background:var(--coal);color:var(--pearl);border-radius:12px;padding:9px 14px;margin:16px 0 2px;font-size:17px}
+.cmb b{color:#ff9a66;font-size:1.08em}
+.cmb span{font-size:.8em;opacity:.85;white-space:nowrap}
+.it.sub{border-left:3px solid var(--orange);padding-left:12px;margin-left:6px;width:calc(100% - 6px)}
+.srcs{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
+body.ks .cmb{font-size:26px;padding:12px 18px;border-radius:16px}
+body.ks .srcs{font-size:15px}
 .it.cur{background:rgba(240,90,30,.13);border-radius:12px;box-shadow:inset 5px 0 0 var(--orange);padding-left:12px}
 .curhint{margin:6px 16px 8px;font-size:14px;color:#6b6966}
 .curhint.all{color:#1f8a4c;font-weight:700}
@@ -660,10 +667,10 @@ const COMBOS={
  "Combo 4":[[2,"Uramaki Salmão Grelhado Especial","5 un"],[2,"Uramaki Filadélfia","5 un"],[2,"Hot Roll Filadélfia","5 un"],[1,"Hot Roll Salmão Grelhado","5 un"],[1,"Hot Roll Salmão Batidinho","5 un"],[6,"Joy Salmão Maçaricado + Geleia de Pimenta","1 un"]],
  "Combo 5":[[12,"Joy Salmão Tradicional","1 un"],[12,"Joy Salmão Maçaricado + Geleia de Pimenta","1 un"],[2,"Uramaki Filadélfia","5 un"],[1,"Sashimi 10 fatias de salmão",""]]
 };
-function mkItem(q,nome,un,from){
+function mkItem(q,nome,un,from,fq){
   let cat="Outros", disp=nome;
   for(const [p,label] of CATS){ if(nome.toLowerCase().startsWith(p.toLowerCase()+" ")){cat=label;disp=nome.slice(p.length).trim();break} }
-  const it={q,nome:disp,cat,un,done:false}; if(from) it.from=from; return it;
+  const it={q,nome:disp,cat,un,done:false}; if(from){it.from=from; if(fq) it.fq=fq} return it;
 }
 function parseOrder(raw){
   const lines=raw.split(/\r?\n/).map(l=>l.replace(/\*/g,"").trim()).filter(Boolean);
@@ -675,7 +682,7 @@ function parseOrder(raw){
       let nome=m[2].trim(), un="";
       const u=nome.match(/^(.*?)\s*\(([^)]+)\)\s*$/); if(u){nome=u[1].trim();un=u[2].trim()}
       const qn=parseInt(m[1],10), cb=COMBOS[nome];
-      if(cb){ cb.forEach(([cq,cn,cu])=>o.items.push(mkItem(cq*qn,cn,cu,nome))); }
+      if(cb){ cb.forEach(([cq,cn,cu])=>o.items.push(mkItem(cq*qn,cn,cu,nome,qn))); }
       else o.items.push(mkItem(qn,nome,un));
     }else if((m=l.match(/^Total:?\s*R\$\s*([\d.]+,\d{2})/i))) o.total=m[1];
     else if((m=l.match(/^Nome:\s*(.+)/i))) o.cliente=m[1];
@@ -780,7 +787,7 @@ function baseView(act){
     const g=B[key]=B[key]||{cat:it.cat,base,first:o.dueAt,pcs:0,q:0,vars:{}};
     g.first=Math.min(g.first,o.dueAt);
     const v=g.vars[it.nome]=g.vars[it.nome]||{nome:it.nome,topo,esp,pcs:0,q:0,parts:[],keys:[]};
-    const p=pcsOf(it); g.pcs+=p; g.q+=it.q; v.pcs+=p; v.q+=it.q; v.parts.push({o,q:it.q}); v.keys.push(o.id+":"+i);
+    const p=pcsOf(it); g.pcs+=p; g.q+=it.q; v.pcs+=p; v.q+=it.q; v.parts.push({o,q:it.q,from:it.from}); v.keys.push(o.id+":"+i);
   }));
   const gs=Object.values(B).sort((a,b)=>a.first-b.first);
   const ready=orders.filter(o=>o.status!=="pronto"&&o.items.length&&o.items.every(i=>i.done));
@@ -792,7 +799,7 @@ function baseView(act){
       ${multi?`<div class="bnote">Faça a base de ${g.pcs} peças de uma vez e depois finalize cada versão.</div>`:""}
       ${vs.map(v=>`<div class="vr"><div><div class="vn"><b>${v.pcs?v.pcs+" "+(v.pcs===1?"peça":"peças"):v.q+"×"}</b> · ${esc(v.nome)}</div>
         <small>${v.topo?esc(v.topo):(hasEsp?"sem cobertura extra":"")}</small>
-        <small>${v.parts.map(x=>`${who(x.o)} ${x.q>1?"×"+x.q+" ":""}· ${hhmm(x.o.dueAt)}`).join(" &nbsp;|&nbsp; ")}</small></div>
+        <small>${v.parts.map(x=>`${who(x.o)} ${x.q>1?"×"+x.q+" ":""}${x.from?"· "+esc(x.from)+" ":""}· ${hhmm(x.o.dueAt)}`).join(" &nbsp;|&nbsp; ")}</small></div>
         <button class="btn" data-act="vdone" data-k="${v.keys.join(";")}">Feito ✓</button></div>`).join("")}
     </section>`;
   }).join("");
@@ -804,7 +811,18 @@ function baseView(act){
 /* ---------- sushiman: pedido atual + teclado ---------- */
 const activeList=()=>orders.filter(o=>o.status!=="pronto").sort((a,b)=>a.dueAt-b.dueAt||a.createdAt-b.createdAt);
 const curOrder=()=>{const a=activeList();return a.find(o=>o.id===focusId)||a[0]||null};
-function ordIdx(o){const g={};o.items.forEach((it,i)=>(g[it.cat]=g[it.cat]||[]).push(i));return Object.keys(g).sort((a,b)=>catOrder(a)-catOrder(b)).flatMap(c=>g[c])}
+const fullName=it=>{const c=CATS.find(x=>x[1]===it.cat);return c?c[0]+" "+it.nome:it.nome};
+function displayGroups(o){
+  const cb={}, cbOrder=[], av={};
+  o.items.forEach((it,i)=>{
+    if(it.from){ if(!cb[it.from]){cb[it.from]={combo:true,label:it.from,fq:it.fq||0,list:[]};cbOrder.push(it.from)} cb[it.from].list.push([it,i]) }
+    else (av[it.cat]=av[it.cat]||[]).push([it,i]);
+  });
+  const out=cbOrder.map(k=>{const g=cb[k]; g.list.sort((a,b)=>catOrder(a[0].cat)-catOrder(b[0].cat)); g.pcs=g.list.reduce((a,x)=>a+pcsOf(x[0]),0); return g});
+  Object.keys(av).sort((a,b)=>catOrder(a)-catOrder(b)).forEach(c=>out.push({combo:false,label:c,list:av[c]}));
+  return out;
+}
+function ordIdx(o){return displayGroups(o).flatMap(g=>g.list.map(x=>x[1]))}
 function finishOrder(o){
   const rest=activeList().filter(x=>x.id!==o.id); focusId=null;
   patch(o.id,x=>({status:"pronto",doneAt:Date.now(),items:x.items.map(it=>({...it,done:true}))}));
@@ -869,10 +887,10 @@ function ticket(o,rec){
   const t=timing(o), isNew=Date.now()-o.createdAt<120000&&o.status==="novo";
   const NM=needMap(o,false).m;
   const totPcs=o.items.reduce((a,i)=>a+pcsOf(i),0), isCur=mode==="sushiman"&&o.id===curId, idxs=ordIdx(o), nxt=idxs.find(i=>!o.items[i].done);
-  const groups={}; o.items.forEach((it,i)=>{(groups[it.cat]=groups[it.cat]||[]).push([it,i])});
-  const cats=Object.keys(groups).sort((a,b)=>catOrder(a)-catOrder(b));
-  const items=cats.map(c=>`<div class="cat">${esc(c)}</div>`+groups[c].map(([it,i])=>
-    `<button class="it${it.done?" on":""}${isCur&&i===nxt?" cur":""}" data-act="chk" data-o="${o.id}" data-i="${i}"><span class="box">✓</span><span class="tx"><b>${it.q}×</b>${esc(it.nome)}${it.from?`<small class="frm">${esc(it.from)}</small>`:""}${pcsOf(it)?`<span class="pcs"><i>${pcsOf(it)}</i> ${pcsOf(it)===1?"peça":"peças"}</span>`:""}${perOf(it)>1&&it.q>1?`<small>${it.q} × ${perOf(it)} un</small>`:""}${ppChips(o,it,NM)}</span></button>`).join("")).join("");
+  const btn=([it,i],sub)=>`<button class="it${sub?" sub":""}${it.done?" on":""}${isCur&&i===nxt?" cur":""}" data-act="chk" data-o="${o.id}" data-i="${i}"><span class="box">✓</span><span class="tx"><b>${it.q}×</b>${esc(sub?fullName(it):it.nome)}${pcsOf(it)?`<span class="pcs"><i>${pcsOf(it)}</i> ${pcsOf(it)===1?"peça":"peças"}</span>`:""}${perOf(it)>1&&it.q>1?`<small>${it.q} × ${perOf(it)} un</small>`:""}${ppChips(o,it,NM)}</span></button>`;
+  const items=displayGroups(o).map(g=>g.combo
+    ?`<div class="cmb"><b>${esc(g.label)}${g.fq>1?" ×"+g.fq:""}</b><span>${g.pcs?pcTxt(g.pcs)+" · ":""}${g.list.filter(x=>x[0].done).length}/${g.list.length} itens</span></div>`+g.list.map(x=>btn(x,true)).join("")
+    :`<div class="cat">${esc(g.label)}</div>`+g.list.map(x=>btn(x,false)).join("")).join("");
   const info=rec?`<div class="info"><div><b>${esc(o.cliente||"Cliente")}</b> · ${esc(o.modo)}</div>${o.modo==="Entrega"&&o.endereco?`<div>${esc(o.endereco)}</div>`:""}${o.modo==="Entrega"&&o.mapa?`<div><a class="maplnk" href="${esc(o.mapa)}" target="_blank" rel="noopener">📍 Abrir localização no Google Maps</a></div>`:""}<div>Pagamento: <b>${esc(o.pagamento||"—")}</b>${o.total?` · Total: <b>R$ ${esc(o.total)}</b>`:""}</div></div>`:"";
   const obs=o.obs?`<div class="obs"><small>Observação</small>${esc(o.obs)}</div>`:"";
   let acts="";
@@ -880,7 +898,7 @@ function ticket(o,rec){
   else if(o.status==="preparando") acts=`<button class="btn" data-act="finish" data-o="${o.id}">Marcar pronto ✓</button>`;
   else acts=`<button class="btn sec" data-act="reopen" data-o="${o.id}">Reabrir</button>`;
   if(rec) acts+=`<button class="btn ghost" style="flex:0 0 auto" data-act="del" data-o="${o.id}">${confirmDel===o.id?"Confirmar remoção":"Remover"}</button>`;
-  const hint=isCur?(nxt===undefined?`<div class="curhint all">✓ Tudo pronto · <kbd>Espaço</kbd> conclui e vai ao próximo</div>`:`<div class="curhint"><kbd>Espaço</kbd> marca: <b>${esc(o.items[nxt].nome)}</b></div>`):"";
+  const hint=isCur?(nxt===undefined?`<div class="curhint all">✓ Tudo pronto · <kbd>Espaço</kbd> conclui e vai ao próximo</div>`:`<div class="curhint"><kbd>Espaço</kbd> marca: <b>${esc(o.items[nxt].from?fullName(o.items[nxt]):o.items[nxt].nome)}</b></div>`):"";
   return `<article class="card ${t.cls}${o.status==="preparando"?" prep-on":""}${isCur?" cur":""}" data-card="${o.id}">
     <div class="ch" data-act="focus" data-o="${o.id}"><span class="num">#${o.n}</span>
       <div class="due">${hhmm(o.dueAt)}<small class="${t.cls}">${o.asap&&o.status!=="pronto"?"assim que possível · ":""}${t.txt}${o.horarioCliente?` · cliente pediu ${esc(clientTime(o.horarioCliente))}`:""}</small></div>
@@ -898,15 +916,16 @@ function kanban(act,dn){
     +col("Preparando",prep,prep.map(o=>ticket(o,false)).join(""),"")
     +col("Prontos",dn,dn.slice(0,8).map(mini).join(""),dn.length>8?`últimos 8 de ${dn.length}`:"");
 }
+const srcTxt=x=>{const k=Object.keys(x.src||{}); if(!k.some(n=>n!=="Avulso")) return ""; return `<small class="srcs">${k.sort().map(n=>`${esc(n)}: ${x.src[n]}`).join(" · ")}</small>`};
 function production(active){
   const agg={};
-  active.forEach(o=>o.items.forEach(it=>{ if(it.done) return; const k=it.cat+"|"+it.nome+"|"+it.un; (agg[k]=agg[k]||{cat:it.cat,nome:it.nome,un:it.un,q:0}).q+=it.q }));
+  active.forEach(o=>o.items.forEach(it=>{ if(it.done) return; const k=it.cat+"|"+it.nome+"|"+it.un; const a=(agg[k]=agg[k]||{cat:it.cat,nome:it.nome,un:it.un,q:0,src:{}}); a.q+=it.q; const lb=it.from||"Avulso"; a.src[lb]=(a.src[lb]||0)+it.q }));
   const list=Object.values(agg); const by={};
   list.forEach(x=>(by[x.cat]=by[x.cat]||[]).push(x));
   const cats=Object.keys(by).sort((a,b)=>catOrder(a)-catOrder(b));
   const pieces=list.reduce((a,x)=>a+(/^\d+\s*un/i.test(x.un)?x.q*parseInt(x.un,10):x.q),0);
   $("#prodSum").textContent=list.length?`${list.reduce((a,x)=>a+x.q,0)} itens · ${pieces} peças`:"nada pendente";
-  $("#prodBody").innerHTML=cats.length?cats.map(c=>{const tp=by[c].reduce((a,x)=>a+x.q*perOf(x),0);return `<div class="prodcat"><h4>${esc(c)}${tp?` · ${pcTxt(tp)}`:""}</h4>`+by[c].sort((a,b)=>b.q-a.q).map(x=>`<div class="prodrow"><span><b>${x.q}×</b>${esc(x.nome)}</span>${perOf(x)?`<em>${pcTxt(x.q*perOf(x))}</em>`:`<em>${esc(x.un)}</em>`}</div>`).join("")+`</div>`}).join(""):`<div style="color:var(--muted);font-size:14px">Sem itens para produzir.</div>`;
+  $("#prodBody").innerHTML=cats.length?cats.map(c=>{const tp=by[c].reduce((a,x)=>a+x.q*perOf(x),0);return `<div class="prodcat"><h4>${esc(c)}${tp?` · ${pcTxt(tp)}`:""}</h4>`+by[c].sort((a,b)=>b.q-a.q).map(x=>`<div class="prodrow"><span><b>${x.q}×</b>${esc(x.nome)}${srcTxt(x)}</span>${perOf(x)?`<em>${pcTxt(x.q*perOf(x))}</em>`:`<em>${esc(x.un)}</em>`}</div>`).join("")+`</div>`}).join(""):`<div style="color:var(--muted);font-size:14px">Sem itens para produzir.</div>`;
 }
 function render(){
   const rec=mode==="recepcao";
