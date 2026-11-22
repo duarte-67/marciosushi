@@ -313,7 +313,8 @@ details.prod summary span{font-weight:500;color:var(--muted);font-size:13px}
 .oi .pt{font-size:12px;font-weight:700;color:var(--pearl);white-space:nowrap}
 .oi .pb{height:5px;background:rgba(255,255,255,.14);border-radius:9px;overflow:hidden;margin-top:4px}
 .oi .pb i{display:block;height:100%;background:var(--orange);border-radius:9px;transition:width .4s}
-@media (max-width:700px){.svinfo{flex:1 1 100%}.oi{min-width:0}}
+.gerinfo{margin-top:16px;flex:none}
+@media (max-width:700px){.svinfo{flex:1 1 100%}.oi{min-width:0}.gerinfo{overflow-x:auto;-webkit-overflow-scrolling:touch}.gerinfo .oi{flex:0 0 240px}}
 body.ks .oi{padding:9px 16px 11px;border-radius:14px;max-width:430px}
 body.ks .oi .oh{font-size:16px}
 body.ks .oi .oh b{font-size:20px}
@@ -450,6 +451,7 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 </header>
 
 <main class="wrap">
+  <div class="svinfo gerinfo hide" id="gerInfo"></div>
   <section class="new" id="newBox"><details id="newDet" open>
     <summary><h2>Novo pedido confirmado</h2><span class="chev" aria-hidden="true"></span></summary>
     <p>No WhatsApp, copie a mensagem do cliente, cole aqui e confirme. O pedido entra na fila da cozinha, ordenado pelo horário.</p>
@@ -1295,8 +1297,8 @@ function tickStart(){
   }else startTitle="";
 }
 let svHtml="";
-function svInfoHtml(){
-  const act=activeList().slice(0,2), now=Date.now(), cur=curOrder();
+function svInfoHtml(n){
+  const act=activeList().slice(0,n||2), now=Date.now(), cur=curOrder();
   if(!act.length) return `<div class="oi empty">Sem pedidos na fila 🍣</div>`;
   return act.map(o=>{
     const ms=o.dueAt-now, late=ms<0, a=Math.abs(ms), mm=Math.floor(a/60000), ss=Math.floor(a%60000/1000);
@@ -1309,7 +1311,16 @@ function svInfoHtml(){
       <div class="pb"><i style="width:${pct}%"></i></div></div>`;
   }).join("");
 }
-function tickSvInfo(){ const el=$("#svInfo"); if(!el||mode!=="sushiman") return; const h=svInfoHtml(); if(h!==svHtml){ svHtml=h; el.innerHTML=h } }
+let gerHtml="";
+function tickSvInfo(){
+  const sv=$("#svInfo"), gi=$("#gerInfo");
+  if(sv&&mode==="sushiman"){ const h=svInfoHtml(2); if(h!==svHtml){ svHtml=h; sv.innerHTML=h } }
+  if(gi){
+    const on=mode==="recepcao"&&activeList().length>0;
+    gi.classList.toggle("hide",!on);
+    if(on){ const h=svInfoHtml(4); if(h!==gerHtml){ gerHtml=h; gi.innerHTML=h } }
+  }
+}
 function tickRuns(){
   tickClock(); tickStart(); tickSvInfo();
   const now=Date.now(); let ring=null;
