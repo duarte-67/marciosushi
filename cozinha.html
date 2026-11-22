@@ -145,7 +145,13 @@ body.ks .prodrow em{font-size:20px}
 
 /* recepção: novo pedido */
 .new{margin-top:18px;background:var(--ink2);border:1px solid var(--line);border-radius:20px;padding:16px}
-.new h2{font-family:var(--serif);font-size:20px;font-weight:600;margin-bottom:4px}
+.new h2{font-family:var(--serif);font-size:20px;font-weight:600;margin:0}
+.new summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;-webkit-tap-highlight-color:transparent}
+.new summary::-webkit-details-marker{display:none}
+.new summary .chev{flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--ink);border:1px solid var(--line);position:relative}
+.new summary .chev::after{content:"";position:absolute;left:11px;top:10px;width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:.2s}
+.new details[open] summary .chev::after{transform:rotate(-135deg);top:14px}
+.new details[open] summary{margin-bottom:6px}
 .new p{font-size:13px;color:var(--muted);margin-bottom:10px}
 textarea,input[type=number],input[type=time]{width:100%;font:inherit;font-size:15px;border-radius:14px;border:1.5px solid var(--line);background:var(--coal);color:var(--pearl);padding:12px 14px}
 textarea{min-height:120px;resize:vertical}
@@ -409,8 +415,8 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 </header>
 
 <main class="wrap">
-  <section class="new" id="newBox">
-    <h2>Novo pedido confirmado</h2>
+  <section class="new" id="newBox"><details id="newDet" open>
+    <summary><h2>Novo pedido confirmado</h2><span class="chev" aria-hidden="true"></span></summary>
     <p>No WhatsApp, copie a mensagem do cliente, cole aqui e confirme. O pedido entra na fila da cozinha, ordenado pelo horário.</p>
     <textarea id="raw" placeholder="Cole aqui a mensagem do pedido…"></textarea>
     <div class="rowc">
@@ -419,7 +425,7 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
       <label class="prep" id="readyLbl"><span id="readyTxt">Cliente quer o quanto antes. Pronto às</span> <input type="time" id="ready"> <small id="readyNote"></small></label>
     </div>
     <div class="err" id="err"></div>
-  </section>
+  </details></section>
 
 
   <section class="psec hide" id="prepSec">
@@ -780,6 +786,7 @@ $("#cfgBody").addEventListener("change",e=>{
 $("#pvtPrep").addEventListener("click",e=>{const b=e.target.closest("[data-pv]"); if(!b) return; prepView=b.dataset.pv; ls.set("ms-kitchen-pview",prepView); render();});
 $("#sviewBar").addEventListener("click",e=>{const b=e.target.closest("[data-sv]"); if(!b) return; sview=b.dataset.sv; ls.set("ms-kitchen-sview",sview); window.scrollTo(0,0); render();});
 $("#add").onclick=addOrder;
+(()=>{ const d=$("#newDet"); if(!d) return; if(ls.get("ms-kitchen-newopen","1")==="0") d.open=false; d.addEventListener("toggle",()=>ls.set("ms-kitchen-newopen",d.open?"1":"0")) })();
 $("#clear").onclick=()=>{$("#raw").value="";$("#err").textContent="";delete $("#ready").dataset.t;syncReady()};
 $("#raw").addEventListener("input",syncReady);
 $("#ready").addEventListener("input",()=>{$("#ready").dataset.t="1"; syncReady()});
