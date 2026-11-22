@@ -40,6 +40,18 @@ button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 .sec h2{font-family:var(--serif);font-weight:600;font-size:28px;letter-spacing:-.01em;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .sec h2 small{font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--burnt)}
 .sec .rule{height:2px;width:46px;background:var(--orange);margin:10px 0 14px;border-radius:2px}
+.row.combo{grid-template-columns:1fr auto}
+.row.combo .cimg{grid-column:1/-1;width:100%;height:auto;aspect-ratio:800/502;object-fit:cover;border-radius:14px;background:#e9e7e4;display:block}
+.row.combo .cimg{grid-row:1}
+.row.combo .nm{grid-column:1;grid-row:2}
+.row.combo .pr{grid-column:2;grid-row:2}
+.row.combo .ds{grid-column:1/-1;grid-row:3}
+.row.combo .ctl{grid-column:1/-1;grid-row:4;justify-self:end}
+.cs{display:block;font-size:12.5px;font-weight:700;color:var(--burnt);letter-spacing:.02em;margin:2px 0 6px}
+.cl{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.cl li{font-size:13.5px;color:#4a4947;display:flex;gap:10px;line-height:1.35}
+.cl li span{min-width:62px;font-weight:700;color:var(--burnt)}
+.real{font-size:13px;color:var(--muted);margin:10px 4px 0;text-align:center}
 .sec .intro{font-size:14.5px;line-height:1.55;color:#4a4947;margin:0 0 14px;max-width:62ch}
 .padrao{margin:22px auto 0;max-width:720px;padding:0 18px}
 .padrao .box{background:var(--coal);color:var(--pearl);border-radius:22px;padding:22px 20px;box-shadow:0 14px 34px -18px rgba(28,27,26,.6)}
@@ -250,6 +262,15 @@ const FEE_CITY = "Fátima do Sul";   // única cidade com entrega própria
 const OUTRA_CID = "Vicentina";      // outra cidade: entrega pelo Mais Delivery, frete a combinar
 
 const MENU = [
+ {id:"combo", nome:"Combos", sub:"Montados para você", un:"",
+  intro:"Seleções montadas por nós, com variedade de sabores e texturas em uma só bandeja. Escolha o tamanho que combina com a sua mesa.",
+  note:"📷 As fotos são reais: é assim que os combos saem da nossa cozinha.",
+  itens:[
+  ["Combo 1",142,0,"5 sabores · 30 peças","img/combo-1.jpg",["5 un Uramaki Filadélfia","5 un Uramaki Filadélfia Batidinho","10 un Hot Roll Geleia de Pimenta","5 un Uramaki Salmão Grelhado Especial","5 un Uramaki Crocante Especial"]],
+  ["Combo 2",183,1,"6 sabores · 40 peças","img/combo-2.jpg",["5 un Uramaki Salmão Grelhado","5 un Uramaki Grelhado + Pimenta Biquinho","10 un Uramaki Filadélfia Batidinho","5 un Hot Roll Filadélfia","5 un Hot Roll Geleia de Pimenta","10 un Uramaki Filadélfia"]],
+  ["Combo 3",209,0,"6 sabores · 31 peças","img/combo-3.jpg",["5 un Hossomaki Salmão","5 fatias Sashimi","5 un Joy Salmão + Brie","5 un Joy Salmão Tradicional","5 un Joy Salmão + Amêndoa","6 un Joy Salmão Maçaricado + Geleia de Pimenta"]],
+  ["Combo 4",230,0,"6 sabores · 46 peças","img/combo-4.jpg",["10 un Uramaki Salmão Grelhado Especial","10 un Uramaki Filadélfia","10 un Hot Roll Filadélfia","5 un Hot Roll Salmão Grelhado","5 un Hot Roll Salmão Batidinho","6 un Joy Salmão Maçaricado + Geleia de Pimenta"]],
+  ["Combo 5",296,0,"4 sabores · 44 peças","img/combo-5.jpg",["12 un Joy Salmão Tradicional","12 un Joy Salmão Maçaricado + Geleia de Pimenta","10 un Uramaki Filadélfia","10 fatias Sashimi"]]]},
  {id:"urat", nome:"Uramakis", sub:"Tradicionais · 5 un", un:"5 un",
   intro:"Arroz por fora, alga por dentro. O uramaki é o sushi “ao contrário”: o arroz abraça a alga selecionada e o recheio, e cada peça é finalizada com gergelim selecionado. Textura macia, recheio cremoso e uma mordida que mostra a diferença de trabalhar só com produto de primeira.",
   itens:[
@@ -319,11 +340,11 @@ const MENU = [
 ];
 
 // índice plano
-const PRE = {urat:"Uramaki",ures:"Uramaki",hoss:"Hossomaki",hot:"Hot Roll",hote:"Hot Roll",joy:"Joy",nig:"Niguiri",tem:"Temaki",sas:"Sashimi"};
+const PRE = {combo:"",urat:"Uramaki",ures:"Uramaki",hoss:"Hossomaki",hot:"Hot Roll",hote:"Hot Roll",joy:"Joy",nig:"Niguiri",tem:"Temaki",sas:"Sashimi"};
 const ITEMS = {};
 MENU.forEach(s=>s.itens.forEach((it,i)=>{
   const id = s.id+"-"+i;
-  ITEMS[id] = {id, sec:s.nome, pre:PRE[s.id], un:s.un, nome:it[0], preco:it[1], top:it[2], desc:it[3]};
+  ITEMS[id] = {id, sec:s.nome, pre:PRE[s.id], un:s.un, nome:it[0], preco:it[1], top:it[2], desc:it[3], img:it[4]||"", comp:it[5]||null};
 }));
 
 const brl = v => v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
@@ -381,13 +402,20 @@ MENU.forEach(s=>{
     const id = s.id+"-"+i;
     const row = document.createElement("div");
     row.className="row"; row.id="r-"+id;
-    row.innerHTML = `
+    row.innerHTML = it[4] ? `
+      <img class="cimg" src="${it[4]}" alt="${it[0]} (foto real)" loading="lazy" width="800" height="502">
+      <div class="nm">${it[0]}${it[2]?'<span class="star">★ Mais pedido</span>':''}</div>
+      <div class="pr">${brl(it[1])}</div>
+      <div class="ds"><b class="cs">${it[3]}</b><ul class="cl">${it[5].map(x=>{const m=x.match(/^(\d+ (?:un|fatias))\s+(.*)$/);return `<li><span>${m[1]}</span>${m[2]}</li>`}).join("")}</ul></div>
+      <div class="ctl"></div>` : `
       <div class="nm">${it[0]}${it[2]?'<span class="star">★ Mais pedido</span>':''}</div>
       <div class="pr">${brl(it[1])}</div>
       ${it[3]?`<div class="ds">${it[3]}</div>`:`<div class="ds"></div>`}
       <div class="ctl"></div>`;
+    if(it[4]) row.classList.add("combo");
     card.appendChild(row);
   });
+  if(s.note) card.insertAdjacentHTML("afterend",`<p class="real">${s.note}</p>`);
   menu.appendChild(sec);
 });
 // subtítulos duplicados (ex.: "Tradicionais · 5 un") ficam como estão
@@ -495,7 +523,8 @@ function message(ids, sub, del){
   const L = [MSG.saudacao, ""];
   ids.forEach(id=>{
     const it=ITEMS[id], q=cart[id];
-    L.push(MSG.item(q, it.pre+" "+it.nome, it.un, brl(q*it.preco)));
+    L.push(MSG.item(q, (it.pre?it.pre+" ":"")+it.nome, it.un, brl(q*it.preco)));
+    if(it.comp) it.comp.forEach(c=>L.push("   ↳ "+c));
   });
   L.push("");
   if(aCombinar()){ L.push(`${MSG.entrega}: a combinar (Mais Delivery)`); L.push(`${MSG.total} ${brl(sub)} + frete`, ""); }

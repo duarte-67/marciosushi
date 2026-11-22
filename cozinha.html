@@ -347,6 +347,7 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 .obs small{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--burnt)}
 .info{margin:2px 16px 8px;padding:10px 12px;border-radius:14px;background:var(--grey);font-size:14px;display:grid;gap:3px}
 .info b{font-weight:700}
+.tx small.frm,.frm{display:inline-block!important;width:auto!important;margin:0 0 0 8px!important;background:#ffe9dd;color:var(--burnt)!important;font-weight:700;border-radius:8px;padding:2px 8px!important;font-size:12px!important;vertical-align:middle}
 .maplnk{color:var(--burnt);font-weight:700;text-decoration:underline}
 .acts{display:flex;gap:10px;padding:8px 16px 16px}
 .acts .btn{flex:1;padding:15px}
@@ -652,6 +653,18 @@ async function srvInit(){
 }
 
 /* ---------- leitura da mensagem do WhatsApp ---------- */
+const COMBOS={
+ "Combo 1":[[1,"Uramaki Filadélfia","5 un"],[1,"Uramaki Filadélfia Batidinho","5 un"],[2,"Hot Roll Geleia de Pimenta","5 un"],[1,"Uramaki Salmão Grelhado Especial","5 un"],[1,"Uramaki Croc Especial","5 un"]],
+ "Combo 2":[[1,"Uramaki Salmão Grelhado","5 un"],[1,"Uramaki Grelhado + Pimenta Biquinho","5 un"],[2,"Uramaki Filadélfia Batidinho","5 un"],[1,"Hot Roll Filadélfia","5 un"],[1,"Hot Roll Geleia de Pimenta","5 un"],[2,"Uramaki Filadélfia","5 un"]],
+ "Combo 3":[[1,"Hossomaki Salmão","5 un"],[1,"Sashimi 5 fatias de salmão",""],[5,"Joy Salmão + Brie","1 un"],[5,"Joy Salmão Tradicional","1 un"],[5,"Joy Salmão + Amêndoa","1 un"],[6,"Joy Salmão Maçaricado + Geleia de Pimenta","1 un"]],
+ "Combo 4":[[2,"Uramaki Salmão Grelhado Especial","5 un"],[2,"Uramaki Filadélfia","5 un"],[2,"Hot Roll Filadélfia","5 un"],[1,"Hot Roll Salmão Grelhado","5 un"],[1,"Hot Roll Salmão Batidinho","5 un"],[6,"Joy Salmão Maçaricado + Geleia de Pimenta","1 un"]],
+ "Combo 5":[[12,"Joy Salmão Tradicional","1 un"],[12,"Joy Salmão Maçaricado + Geleia de Pimenta","1 un"],[2,"Uramaki Filadélfia","5 un"],[1,"Sashimi 10 fatias de salmão",""]]
+};
+function mkItem(q,nome,un,from){
+  let cat="Outros", disp=nome;
+  for(const [p,label] of CATS){ if(nome.toLowerCase().startsWith(p.toLowerCase()+" ")){cat=label;disp=nome.slice(p.length).trim();break} }
+  const it={q,nome:disp,cat,un,done:false}; if(from) it.from=from; return it;
+}
 function parseOrder(raw){
   const lines=raw.split(/\r?\n/).map(l=>l.replace(/\*/g,"").trim()).filter(Boolean);
   const o={items:[],cliente:"",endereco:"",mapa:"",modo:"Entrega",horario:"",pagamento:"",obs:"",total:""};
@@ -661,9 +674,9 @@ function parseOrder(raw){
     if((m=l.match(/^(\d+)\s*[x×]\s+(.+?)\s+[—–-]\s+R\$\s*([\d.]+,\d{2})\s*$/i))){
       let nome=m[2].trim(), un="";
       const u=nome.match(/^(.*?)\s*\(([^)]+)\)\s*$/); if(u){nome=u[1].trim();un=u[2].trim()}
-      let cat="Outros", disp=nome;
-      for(const [p,label] of CATS){ if(nome.toLowerCase().startsWith(p.toLowerCase()+" ")){cat=label;disp=nome.slice(p.length).trim();break} }
-      o.items.push({q:parseInt(m[1],10),nome:disp,cat,un,done:false});
+      const qn=parseInt(m[1],10), cb=COMBOS[nome];
+      if(cb){ cb.forEach(([cq,cn,cu])=>o.items.push(mkItem(cq*qn,cn,cu,nome))); }
+      else o.items.push(mkItem(qn,nome,un));
     }else if((m=l.match(/^Total:?\s*R\$\s*([\d.]+,\d{2})/i))) o.total=m[1];
     else if((m=l.match(/^Nome:\s*(.+)/i))) o.cliente=m[1];
     else if((m=l.match(/^(?:Endere[çc]o|Entrega em):\s*(.+)/i))) o.endereco=m[1];
@@ -859,7 +872,7 @@ function ticket(o,rec){
   const groups={}; o.items.forEach((it,i)=>{(groups[it.cat]=groups[it.cat]||[]).push([it,i])});
   const cats=Object.keys(groups).sort((a,b)=>catOrder(a)-catOrder(b));
   const items=cats.map(c=>`<div class="cat">${esc(c)}</div>`+groups[c].map(([it,i])=>
-    `<button class="it${it.done?" on":""}${isCur&&i===nxt?" cur":""}" data-act="chk" data-o="${o.id}" data-i="${i}"><span class="box">✓</span><span class="tx"><b>${it.q}×</b>${esc(it.nome)}${pcsOf(it)?`<span class="pcs"><i>${pcsOf(it)}</i> ${pcsOf(it)===1?"peça":"peças"}</span>`:""}${perOf(it)>1&&it.q>1?`<small>${it.q} × ${perOf(it)} un</small>`:""}${ppChips(o,it,NM)}</span></button>`).join("")).join("");
+    `<button class="it${it.done?" on":""}${isCur&&i===nxt?" cur":""}" data-act="chk" data-o="${o.id}" data-i="${i}"><span class="box">✓</span><span class="tx"><b>${it.q}×</b>${esc(it.nome)}${it.from?`<small class="frm">${esc(it.from)}</small>`:""}${pcsOf(it)?`<span class="pcs"><i>${pcsOf(it)}</i> ${pcsOf(it)===1?"peça":"peças"}</span>`:""}${perOf(it)>1&&it.q>1?`<small>${it.q} × ${perOf(it)} un</small>`:""}${ppChips(o,it,NM)}</span></button>`).join("")).join("");
   const info=rec?`<div class="info"><div><b>${esc(o.cliente||"Cliente")}</b> · ${esc(o.modo)}</div>${o.modo==="Entrega"&&o.endereco?`<div>${esc(o.endereco)}</div>`:""}${o.modo==="Entrega"&&o.mapa?`<div><a class="maplnk" href="${esc(o.mapa)}" target="_blank" rel="noopener">📍 Abrir localização no Google Maps</a></div>`:""}<div>Pagamento: <b>${esc(o.pagamento||"—")}</b>${o.total?` · Total: <b>R$ ${esc(o.total)}</b>`:""}</div></div>`:"";
   const obs=o.obs?`<div class="obs"><small>Observação</small>${esc(o.obs)}</div>`:"";
   let acts="";
