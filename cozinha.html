@@ -376,6 +376,7 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 .sa-row .ic{font-size:24px;line-height:1.1}
 .sa-row b{display:block;font-size:17px}
 .sa-row small{display:block;font-size:13.5px;opacity:.96;margin-top:1px}
+.sa-row .fron{margin-top:8px;padding:10px 16px;background:#fff;color:var(--burnt);border:2px solid #fff;font-size:15px}
 .sa-b{display:flex;gap:10px;margin-top:8px}
 .sa-b .btn{flex:1;background:#fff;color:var(--burnt);border:2px solid #fff}
 .sa-b .btn.ghost{background:transparent;color:#fff}
@@ -468,7 +469,7 @@ const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(
 
 /* ---------- preparos da recepção: regras por item ---------- */
 const LEADKEY="ms-kitchen-lead";
-const LEAD0={grelhar:30,croc:20,couve:60,amendoa:45,hot:10,max:4,win:30,aviso:5,t_grelhar:8,t_croc:4,t_couve:15,t_amendoa:5,t_hot:3};
+const LEAD0={grelhar:30,croc:20,couve:60,amendoa:45,hot:10,max:4,win:30,aviso:5,fritadeira:10,t_grelhar:8,t_croc:4,t_couve:15,t_amendoa:5,t_hot:3};
 let LEAD={...LEAD0}; try{Object.assign(LEAD,JSON.parse(ls.get(LEADKEY,"{}")))}catch(e){}
 const KORDER=["grelhar","croc","couve","amendoa","hot"];
 const INPUTS=["grelhar","croc","couve","amendoa"]; // insumos que o sushiman usa antes de montar
@@ -748,6 +749,7 @@ document.addEventListener("click",e=>{
   else if(a==="tdone"){ endRun(b.dataset.id,b.dataset.k,true); }
   else if(a==="tcancel"){ endRun(b.dataset.id,b.dataset.k,false); }
   else if(a==="tsil"){ silenced.add(b.dataset.id); tickRuns(); }
+  else if(a==="fron"){ ls.set(FRYON,String(Date.now())); tickStart(); }
   else if(a==="sok"){ dueStarts().forEach(g=>g.keys.forEach(k=>ack.add(k))); saveAck(); tickStart(); }
   else if(a==="sago"){ startBeepAt=Date.now()+60000; const t=$("#prepSec"); if(t) t.scrollIntoView({behavior:"smooth",block:"start"}); }
   else if(a==="unprep"){ const k=b.dataset.k; patch(id,o=>({prep:{...(o.prep||{}),[k]:0},runs:{...(o.runs||{}),[k]:[]}})); }
@@ -1025,7 +1027,7 @@ function allRuns(){
   return Object.values(g).sort((a,b)=>a.t0-b.t0);
 }
 function startRun(list,k){
-  unlockAudio();
+  unlockAudio(); if(k==="hot"||k==="croc") ls.set(FRYON,String(Date.now()));
   const id=Date.now().toString(36)+Math.random().toString(36).slice(2,5), dur=+LEAD["t_"+k]||0, t0=Date.now();
   list.forEach(({id:oid,n})=>{ if(n>0) patch(oid,o=>({runs:{...(o.runs||{}),[k]:[...runsOf(o,k),{id,t0,dur,n}]}})) });
 }
@@ -1157,7 +1159,7 @@ function ppChips(o,it,NM){
   }).join("")+`</span>`;
 }
 function buildCfg(){
-  const F=[["grelhar","Grelhar salmão: começar quantos min antes"],["croc","Fritar salmão empanado: min antes"],["couve","Couve crispy: min antes"],["amendoa","Dourar amêndoa: min antes"],["hot","Fritar hot roll / hot temaki: min antes da entrega"],["max","Máx. de rolinhos fritando ao mesmo tempo (1 rolinho = 2 porções)"],["win","Agrupar pedidos com até quantos min de diferença"],["aviso","Alarme: avisar quantos min antes da hora de começar"],
+  const F=[["grelhar","Grelhar salmão: começar quantos min antes"],["croc","Fritar salmão empanado: min antes"],["couve","Couve crispy: min antes"],["amendoa","Dourar amêndoa: min antes"],["hot","Fritar hot roll / hot temaki: min antes da entrega"],["max","Máx. de rolinhos fritando ao mesmo tempo (1 rolinho = 2 porções)"],["win","Agrupar pedidos com até quantos min de diferença"],["aviso","Alarme: avisar quantos min antes da hora de começar"],["fritadeira","Alarme: ligar a fritadeira quantos min antes da fritura"],
     ["t_grelhar","Timer: grelhar salmão (min, 0 = sem timer)"],["t_croc","Timer: fritar salmão empanado (min)"],["t_couve","Timer: assar couve crispy (min)"],["t_amendoa","Timer: dourar amêndoa (min)"],["t_hot","Timer: fritar hot roll / hot temaki (min)"]];
   $("#cfgBody").innerHTML=F.map(([k,l])=>`<label>${l}<input type="number" min="${k.startsWith("t_")?0:1}" max="240" data-lead="${k}" value="${LEAD[k]}"></label>`).join("");
 }
@@ -1182,6 +1184,16 @@ const ACKKEY="ms-kitchen-ack";
 let ack=new Set(); try{ ack=new Set(JSON.parse(ls.get(ACKKEY,"[]"))) }catch(e){}
 const saveAck=()=>ls.set(ACKKEY,JSON.stringify([...ack].slice(-300)));
 let startHtml="", startBeepAt=0, startTitle="";
+const FRYK=["hot","croc"], FRYON="ms-kitchen-fryon";
+const fryIsOn=()=>Date.now()-(+ls.get(FRYON,"0"))<60*60000||fryingNow()>0||orders.some(o=>o.status!=="pronto"&&runsOf(o,"croc").length>0);
+function fryerDue(){
+  if(fryIsOn()) return null;
+  const now=Date.now(), w=(+LEAD.fritadeira||10)*60000; let at=Infinity;
+  orders.forEach(o=>{ if(o.status==="pronto") return;
+    taskRows(o).forEach(r=>{ if(!FRYK.includes(r.k)||r.pend<=0) return; const a=o.dueAt-leadOf(r.k); if(a<at) at=a });
+  });
+  return at-w<=now?{at}:null;
+}
 function dueStarts(){
   const now=Date.now(), w=(+LEAD.aviso||5)*60000, by={};
   orders.forEach(o=>{ if(o.status==="pronto") return;
@@ -1197,15 +1209,16 @@ function dueStarts(){
 }
 function tickStart(){
   const el=$("#salert"); if(!el) return;
-  const list=mode==="recepcao"?dueStarts():[], now=Date.now();
+  const list=mode==="recepcao"?dueStarts():[], fry=mode==="recepcao"?fryerDue():null, now=Date.now();
   const html=list.map(g=>{
     const P=PREP[g.k], late=g.at<=now;
     return `<div class="sa-row"><span class="ic">${P.ico}</span><div><b>${P.t}: ${g.k==="hot"?qtyTxt("hot",g.n):g.n+" un"}</b><small>${g.who.join(", ")} · ${late?"comece agora (era para "+hhmm(g.at)+")":"comece até "+hhmm(g.at)}</small></div></div>`;
   }).join("");
-  const full=list.length?`<div class="sa-h">⏰ Hora de começar</div>${html}<div class="sa-b"><button class="btn" data-act="sago">Ver o que fazer</button><button class="btn ghost" data-act="sok">Entendi</button></div>`:"";
+  const fryRow=fry?`<div class="sa-row"><span class="ic">🔌</span><div><b>Ligue a fritadeira e regule a temperatura</b><small>${fry.at<=now?"primeira fritura agora (era para "+hhmm(fry.at)+")":"primeira fritura às "+hhmm(fry.at)}</small><button class="btn fron" data-act="fron">Fritadeira ligada ✓</button></div></div>`:"";
+  const full=(list.length||fry)?`<div class="sa-h">⏰ ${list.length?"Hora de começar":"Prepare a fritadeira"}</div>${fryRow}${html}${list.length?`<div class="sa-b"><button class="btn" data-act="sago">Ver o que fazer</button><button class="btn ghost" data-act="sok">Entendi</button></div>`:""}`:"";
   if(full!==startHtml){ if(!startHtml&&full) startBeepAt=0; startHtml=full; el.innerHTML=full; el.classList.toggle("hide",!full) }
-  if(list.length){
-    startTitle="⏰ Hora de começar: "+PREP[list[0].k].t;
+  if(list.length||fry){
+    startTitle=fry?"🔌 Ligue a fritadeira":"⏰ Hora de começar: "+PREP[list[0].k].t;
     if(now>=startBeepAt){ startBeepAt=now+8000; alarmBeep(); try{navigator.vibrate&&navigator.vibrate([250,120,250])}catch(e){} }
   }else startTitle="";
 }
