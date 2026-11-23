@@ -935,7 +935,7 @@ function baseOf(it){
 function baseView(act){
   const B={}, NMc={};
   /* insumos que a Gerência ainda não deixou prontos (grelhado, croc, couve, amêndoa) */
-  const waitOf=(o,it)=>{ const ks=kindsOf(it).filter(k=>INPUTS.includes(k)); if(!ks.length) return []; const m=(NMc[o.id]=NMc[o.id]||needMap(o,false).m); return ks.filter(k=>prepDone(o,k)<(m[k]||0)) };
+  const waitOf=(o,it)=>{ const ks=kindsOf(it).filter(k=>INPUTS.includes(k)||k==="hot"); if(!ks.length) return []; const m=(NMc[o.id]=NMc[o.id]||needMap(o,false).m); return ks.filter(k=>prepDone(o,k)<(m[k]||0)) };
   act.forEach(o=>o.items.forEach((it,i)=>{
     if(it.done) return;
     const {base,topo,esp}=baseOf(it), key=it.cat+"|"+norm(base), w=waitOf(o,it);
@@ -960,7 +960,7 @@ function baseView(act){
       ${multi?`<div class="bnote">Faça a base de ${g.pcs} peças de uma vez e depois finalize cada versão.</div>`:""}
       ${vs.map(v=>`<div class="vr"><div><div class="vn"><b>${v.pcs?v.pcs+" "+(v.pcs===1?"peça":"peças"):v.q+"×"}</b> · ${esc((typeOf(g.cat)?typeOf(g.cat)+" ":"")+v.nome)}</div>
         <small>${v.topo?esc(v.topo):(hasEsp?"sem cobertura extra":"")}</small>
-        ${v.wait.length?`<small class="wt">⏳ ${v.wait.map(k=>PREP[k].chip[0]).join(" · ")}</small>`:""}
+        ${v.wait.length?`<small class="wt">⏳ ${v.wait.map(k=>k==="hot"?`Aguardando ${/^hot/i.test(v.nome)?v.nome:(typeOf(g.cat)?typeOf(g.cat)+" ":"")+v.nome} fritar`:PREP[k].chip[0]).join(" · ")}</small>`:""}
         <small>${v.parts.map(x=>`${who(x.o)} ${x.q>1?"×"+x.q+" ":""}${x.from?"· "+esc(x.from)+" ":""}· ${hhmm(x.o.dueAt)}`).join(" &nbsp;|&nbsp; ")}</small></div>
         <button class="btn${(()=>{const f=firstV&&!v.wait.length; if(f) firstV=false; v._f=f; return f?" kfirst":""})()}" data-act="vdone" data-k="${v.keys.join(";")}">Feito ✓${v._f?`<kbd>Espaço</kbd>`:""}</button></div>`).join("")}
     </section>`;
