@@ -72,6 +72,19 @@ button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 .cl li span{min-width:62px;font-weight:700;color:var(--burnt)}
 .real{font-size:13px;color:var(--muted);margin:10px 4px 0;text-align:center}
 .sec .intro{font-size:14.5px;line-height:1.55;color:#4a4947;margin:0 0 14px;max-width:62ch}
+.again{max-width:720px;margin:22px auto 0;padding:0 18px}
+.again[hidden]{display:none}
+.again h2{font-family:var(--serif);font-weight:600;font-size:26px;letter-spacing:-.01em;margin:0}
+.again .sub{font-size:13.5px;color:var(--muted);margin:2px 0 0}
+.ag{background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin-top:10px;box-shadow:0 10px 26px -20px rgba(28,27,26,.4)}
+.ag .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--burnt)}
+.ag .top b{font-family:var(--serif);font-size:18px;letter-spacing:0;text-transform:none;color:var(--coal)}
+.ag ul{list-style:none;margin:8px 0 0;padding:0;font-size:14.5px;line-height:1.5;color:var(--coal)}
+.ag li span{font-weight:700;color:var(--burnt);margin-right:6px}
+.ag .gone{margin:6px 0 0;font-size:12.5px;color:var(--muted)}
+.ag .again-btn{margin-top:12px;width:100%;background:var(--orange);color:#fff;border-radius:14px;padding:13px;font-weight:700;font-size:15px}
+.ag .again-btn:active{background:var(--burnt)}
+.again .more-ag{margin:10px auto 0;display:block;font-size:13.5px}
 .padrao{margin:22px auto 0;max-width:720px;padding:0 18px}
 .padrao .box{background:var(--coal);color:var(--pearl);border-radius:22px;padding:22px 20px;box-shadow:0 14px 34px -18px rgba(28,27,26,.6)}
 .padrao small{display:block;font-size:11.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--orange)}
@@ -191,6 +204,8 @@ textarea{resize:none;min-height:68px}
 
 <nav class="nav" aria-label="Categorias"><div class="scroll" id="chips"></div></nav>
 
+<section class="again" id="again" hidden aria-label="Seus últimos pedidos"></section>
+
 <section class="padrao" aria-label="Nosso padrão"><div class="box">
   <small>O padrão Márcio Sushi</small>
   <h2>Só trabalhamos com produto de primeira.</h2>
@@ -278,7 +293,7 @@ textarea{resize:none;min-height:68px}
         <div class="tot"><span id="sTotL">Total</span><span id="sTot"></span></div>
       </div>
       <div class="wnote"><b>Quase lá! Seu pedido segue pelo WhatsApp 💬</b>Ao tocar no botão abaixo, você será levado ao nosso WhatsApp com a mensagem do seu pedido já pronta. É só conferir e enviar: assim recebemos tudo certinho e preparamos o seu sushi com o cuidado de sempre.</div>
-      <p class="note" id="memNote" style="margin-top:16px">Guardamos seu nome, endereço e pedido neste aparelho (cookie) para você não digitar de novo. <button type="button" class="linkbtn" id="forget">Esquecer meus dados</button></p>
+      <p class="note" id="memNote" style="margin-top:16px">Guardamos seu nome, endereço e seus últimos pedidos neste aparelho (cookie) para você não digitar de novo. <button type="button" class="linkbtn" id="forget">Esquecer meus dados</button></p>
     </div>
   </div>
   <div class="fade" id="fade"></div>
@@ -606,7 +621,7 @@ function update(ids, sub, del){
 }));
 $("#send").addEventListener("click",e=>{
   const m = missing();
-  if(!m){ memSave("ms-rascunho",{cart,obs:$("#obs").value.slice(0,300),t:Date.now(),sent:true},DRAFT_DAYS); }   // pedido enviado: na próxima visita começa um novo
+  if(!m){ memSave("ms-rascunho",{cart,obs:$("#obs").value.slice(0,300),t:Date.now(),sent:true},DRAFT_DAYS); histAdd(); }   // pedido enviado: na próxima visita começa um novo
   if(m){ e.preventDefault(); $("#hint").textContent=m; (!$("#nome").value.trim()?$("#nome"):(modo()==="Entrega"&&!$("#end").value.trim())?$("#end"):$("#hora")).focus(); }
 });
 $("#copy").addEventListener("click",async()=>{
@@ -672,11 +687,65 @@ function saveMem(){
 })();
 $("#forget").addEventListener("click",()=>{
   memReady=false;
-  ["ms-perfil","ms-rascunho","ms-cart"].forEach(k=>{ cookieSet(k,"",0); try{ localStorage.removeItem(k) }catch(e){} });
+  ["ms-perfil","ms-rascunho","ms-cart","ms-historico"].forEach(k=>{ cookieSet(k,"",0); try{ localStorage.removeItem(k) }catch(e){} });
+  renderAgain();
   cart={}; $("#nome").value=""; $("#end").value=""; $("#obs").value="";
   refresh(); memReady=true;
   $("#memNote").textContent="Pronto: apagamos seus dados deste aparelho.";
 });
+
+/* ---------- peça de novo: últimos pedidos do cliente (cookie ms-historico) ---------- */
+const HIST_MAX = 5, HIST_SHOW = 3;
+let histAll = false;
+function histLoad(){ const h=memLoad("ms-historico"); return Array.isArray(h)?h:[]; }
+function histAdd(){
+  const rows = Object.keys(cart).filter(k=>cart[k]>0 && ITEMS[k]).map(k=>[k.split("-")[0], ITEMS[k].nome, cart[k]]);
+  if(!rows.length) return;
+  let h = histLoad();
+  const sig = r => JSON.stringify(r.slice().sort());
+  h = h.filter(o=>sig(o.i)!==sig(rows));              // o mesmo pedido repetido não duplica: sobe para o topo
+  h.unshift({t:Date.now(), i:rows});
+  h = h.slice(0,HIST_MAX);
+  while(h.length>1 && encodeURIComponent(JSON.stringify(h)).length>3200) h.pop();   // cookie tem limite de ~4 KB
+  memSave("ms-historico",h,365);
+  renderAgain();
+}
+function histResolve(o){
+  const ok=[], gone=[];
+  (o.i||[]).forEach(([sid,nome,q])=>{
+    const k = Object.keys(ITEMS).find(id=>id.split("-")[0]===sid && ITEMS[id].nome===nome);
+    if(k) ok.push({k,q:Math.min(+q||1,30)}); else gone.push(nome);
+  });
+  return {ok,gone};
+}
+function histWhen(t){
+  const d = Math.floor((Date.now()-t)/864e5);
+  if(d<=0) return "Hoje"; if(d===1) return "Ontem"; if(d<30) return "Há "+d+" dias";
+  return new Date(t).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+}
+function renderAgain(){
+  const box=$("#again"); if(!box) return;
+  const list = histLoad().map(o=>({o,r:histResolve(o)})).filter(x=>x.r.ok.length);
+  if(!list.length){ box.hidden=true; box.innerHTML=""; return; }
+  const show = histAll ? list : list.slice(0,HIST_SHOW);
+  box.hidden=false;
+  box.innerHTML = `<h2>Peça de novo</h2><p class="sub">Seus últimos pedidos, prontos para repetir.</p>` + show.map(({o,r},n)=>{
+    const tot = r.ok.reduce((a,x)=>a+x.q*ITEMS[x.k].preco,0);
+    return `<div class="ag"><div class="top"><span>${histWhen(o.t)}</span><b>${brl(tot)}</b></div>
+      <ul>${r.ok.map(x=>`<li><span>${x.q}x</span>${(ITEMS[x.k].pre?ITEMS[x.k].pre+" ":"")+ITEMS[x.k].nome}</li>`).join("")}</ul>
+      ${r.gone.length?`<p class="gone">${r.gone.length===1?"1 item não está mais":r.gone.length+" itens não estão mais"} no cardápio e ficou de fora.</p>`:""}
+      <button type="button" class="again-btn" data-ag="${list.indexOf(list.find(y=>y.o===o))}">Pedir de novo</button></div>`;
+  }).join("") + (list.length>HIST_SHOW ? `<button type="button" class="linkbtn more-ag" id="agMore">${histAll?"Mostrar menos":"Ver pedidos mais antigos"}</button>` : "");
+}
+document.addEventListener("click",e=>{
+  const m=e.target.closest("#agMore"); if(m){ histAll=!histAll; renderAgain(); return; }
+  const b=e.target.closest("[data-ag]"); if(!b) return;
+  const list = histLoad().map(o=>histResolve(o)).filter(r=>r.ok.length);
+  const r = list[+b.dataset.ag]; if(!r) return;
+  r.ok.forEach(x=>{ cart[x.k]=Math.min((cart[x.k]||0)+x.q,50); });
+  refresh(); open();
+});
+renderAgain();
 
 /* ---------- localização do cliente (Google Maps) ---------- */
 function locUI(){
