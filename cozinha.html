@@ -595,6 +595,8 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
         <div class="hbar">
           <div class="pvt" id="anaRange"><button data-r="1">Hoje</button><button data-r="7">7 dias</button><button data-r="30">30 dias</button><button data-r="all">Tudo</button></div>
           <button class="btn ghost" id="anaReload">Atualizar</button>
+          <button class="btn ghost" id="anaCsv">Baixar planilha (CSV)</button>
+          <button class="btn ghost hall" id="anaReset">🗑 Zerar estatísticas</button>
         </div>
         <div id="anaOut"></div>
       </div>
@@ -1674,6 +1676,10 @@ function anaCalc(){
     Object.entries(r.ia||{}).forEach(([k,v])=>{const x=it[k]=it[k]||{k,t:0,look:0,add:0}; if(v>0) x.add++});
   });
   o.items=Object.values(it); o.cartAdds=o.items.reduce((a,x)=>a+x.add,0);
+  const cnt=f=>{const m={}; R.forEach(r=>{const k=f(r); if(k) m[k]=(m[k]||0)+1}); return Object.entries(m).sort((a,b)=>b[1]-a[1])};
+  o.places=cnt(r=>r.city?(r.city+(r.reg?", "+r.reg:"")):(r.cc?"País: "+r.cc:"")); o.noPlace=R.filter(r=>!r.city&&!r.cc).length;
+  o.os=cnt(r=>r.os); o.br=cnt(r=>r.br);
+  o.recent=R.slice().sort((a,b)=>(b.t0||0)-(a.t0||0)).slice(0,15);
   return o;
 }
 function anaRender(){
@@ -1710,8 +1716,35 @@ function anaRender(){
   <h5>Itens mais olhados</h5><div class="tb">${most.map(x=>row(x)).join("")||'<p class="hmsg">Sem dados ainda.</p>'}</div>
   <h5>Itens mais adicionados</h5><div class="tb">${added.map(x=>row(x,"good")).join("")||'<p class="hmsg">Ninguém adicionou itens neste período.</p>'}</div>
   <h5>Olham, mas ignoram</h5><div class="tb">${ignored.map(x=>row(x,"bad")).join("")||'<p class="hmsg">Nenhum item com muita visualização e pouca adição (ou ainda poucos dados).</p>'}</div>
-  <h5>De onde vêm</h5><p class="hmsg" style="margin-top:0">${srcs} · ${d.ret} ${d.ret===1?"visita":"visitas"} de quem já tinha voltado antes (${pc(d.ret,n)}%)</p>
-  <p class="hmsg">Medido de forma anônima, sem nome, telefone ou endereço. “Olhou” = o item ficou pelo menos 2 segundos no meio da tela do cliente.</p>`;
+  <h5>De onde vêm (localização aproximada)</h5><div class="fn">${d.places.slice(0,8).map(([k,v])=>bar(esc(k),v,d.places[0][1],`${v} · ${pc(v,n)}%`)).join("")||'<p class="hmsg" style="margin-top:0">Ainda sem localização nas visitas.</p>'}</div>
+  ${d.noPlace?`<p class="hmsg">${d.noPlace} ${d.noPlace===1?"visita ficou":"visitas ficaram"} sem localização (bloqueador de anúncios, VPN ou sem internet para consultar).</p>`:""}
+  <h5>Aparelhos</h5><div class="fn">${d.os.slice(0,5).map(([k,v])=>bar(esc(k),v,d.os[0][1],`${v} · ${pc(v,n)}%`,true)).join("")}</div>
+  <p class="hmsg" style="margin-top:8px">Navegador: ${d.br.slice(0,5).map(([k,v])=>`${esc(k)} ${pc(v,n)}%`).join(" · ")||"—"}</p>
+  <h5>Últimas visitas</h5><div class="tb">${d.recent.map(r=>{const dt=new Date(r.t0||0), res=r.sent?"enviou o pedido":(sumObj(r.ia)||r.maxCart)?"adicionou ao carrinho":"só olhou";
+    return `<div class="tr ${r.sent?"good":""}"><b>${esc(r.city?(r.city+(r.reg?", "+r.reg:"")):"Local desconhecido")}</b><em>${esc(res)}</em><span>${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})} ${hhmm(r.t0||0)} · ${esc([r.os,r.br].filter(Boolean).join(" · ")||"aparelho ?")}${r.scr?" · "+esc(r.scr):""} · ${fmtS(r.dur||0)} na página${r.ret?" · já tinha voltado":""}</span><span style="text-align:right">${r.ip?"IP "+esc(r.ip):""}</span></div>`}).join("")}</div>
+  <h5>Origem do acesso</h5><p class="hmsg" style="margin-top:0">${srcs} · ${d.ret} ${d.ret===1?"visita":"visitas"} de quem já tinha voltado antes (${pc(d.ret,n)}%)</p>
+  <p class="hmsg">A localização vem do IP e é aproximada (costuma indicar a cidade do provedor de internet, e pode errar). O IP é guardado com o último número zerado. Não há nome, telefone nem endereço nesses dados. “Olhou” = o item ficou pelo menos 2 segundos no meio da tela do cliente.</p>`;
+}
+async function anaReset(){
+  if(!shared||!dbRef){ toast("Sem conexão com o banco."); return }
+  const r=await askConfirm({title:"Zerar todas as estatísticas?",text:"Apaga para sempre todas as visitas medidas até agora (tempo, itens vistos, origem, aparelho e local). Os pedidos, o histórico e os preços não são afetados. Se quiser guardar uma cópia, baixe a planilha antes.",ok:"Zerar tudo",word:"ZERAR"});
+  if(!r) return;
+  try{
+    let total=0;
+    for(let i=0;i<40;i++){
+      const snap=await dbRef.collection("analytics").limit(400).get(); if(!snap.docs.length) break;
+      await Promise.all(snap.docs.map(d=>dbRef.collection("analytics").doc(d.id).delete())); total+=snap.docs.length;
+    }
+    A.rows=[]; anaRender(); toast(total?`Estatísticas zeradas (${total} visitas apagadas)`:"Não havia estatísticas para apagar");
+  }catch(e){ console.warn(e); toast(e&&e.code==="permission-denied"?"Falta liberar a exclusão em 'analytics' nas regras do Firebase.":"Não foi possível zerar. Tente de novo.") }
+}
+function anaCsv(){
+  const R=A.rows.slice().sort((a,b)=>(b.t0||0)-(a.t0||0)); if(!R.length){ toast("Nada para baixar neste período"); return }
+  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const head=["Data","Hora","Cidade","UF","País","IP (parcial)","Sistema","Navegador","Tela","Origem","Já tinha voltado","Segundos na página","Itens adicionados","Abriu o pedido","Enviou o pedido"];
+  const lines=R.map(r=>{const d=new Date(r.t0||0); return [d.toLocaleDateString("pt-BR"),hhmm(r.t0||0),r.city,r.reg,r.cc,r.ip,r.os,r.br,r.scr,r.src,r.ret?"sim":"não",r.dur,sumObj(r.ia),r.cartOpen?"sim":"não",r.sent?"sim":"não"].map(q).join(";")});
+  const blob=new Blob(["\ufeff"+[head.map(q).join(";")].concat(lines).join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="visitas-marcio-sushi-"+dayKey(Date.now())+".csv"; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
 }
 function histCsv(){
   const rows=histFiltered(); if(!rows.length){ toast("Nada para baixar neste período"); return }
@@ -1731,6 +1764,8 @@ function histCsv(){
     ad.addEventListener("toggle",()=>{ if(ad.open) anaLoad() });
     $("#anaRange").addEventListener("click",e=>{const b=e.target.closest("[data-r]"); if(!b) return; A.range=b.dataset.r; anaLoad()});
     $("#anaReload").addEventListener("click",anaLoad);
+    $("#anaReset").addEventListener("click",anaReset);
+    $("#anaCsv").addEventListener("click",anaCsv);
   }
   $("#histList").addEventListener("click",async e=>{
     const b=e.target.closest("[data-hdel]"); if(!b) return; e.preventDefault();

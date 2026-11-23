@@ -196,7 +196,7 @@ textarea{resize:none;min-height:68px}
   </div>
   <p>Pedidos pelo WhatsApp <strong>(67) 99930-1185</strong></p>
   <p style="margin-top:4px">@marciosushi.oficial</p>
-  <p style="margin-top:10px;font-size:11px;opacity:.65;line-height:1.4">Medimos de forma anônima como o cardápio é usado (sem nome, telefone ou endereço) para melhorar a sua experiência.</p>
+  <p style="margin-top:10px;font-size:11px;opacity:.65;line-height:1.4">Medimos como o cardápio é usado para melhorar a sua experiência: aparelho, tempo na página e localização aproximada (cidade). Não guardamos nome, telefone nem endereço.</p>
 </footer>
 
 <div class="bar" id="bar"><button id="openCart" aria-label="Ver pedido">
@@ -760,7 +760,25 @@ storeStatus(); setInterval(storeStatus, 30000);
     if(/insta/.test(u)) return "instagram"; if(/whats|wa\.me/.test(u)) return "whatsapp"; if(/face|fb\./.test(u)) return "facebook"; if(/google/.test(u)) return "google";
     return u.slice(0,30);
   };
-  const S={t0:Date.now(),t1:Date.now(),vid,ret,dev:innerWidth<700?"m":"d",src:srcOf(),dur:0,sec:{},iv:{},ia:{},cartOpen:false,sent:false,maxCart:0,scroll:0};
+  const ua=navigator.userAgent||"";
+  const osOf=()=>/iPhone|iPad|iPod/.test(ua)?"iOS":/Android/.test(ua)?"Android":/Windows/.test(ua)?"Windows":/Mac OS X|Macintosh/.test(ua)?"macOS":/Linux|X11/.test(ua)?"Linux":"outro";
+  const brOf=()=>/Instagram/.test(ua)?"Instagram (app)":/FBAN|FBAV/.test(ua)?"Facebook (app)":/WhatsApp/.test(ua)?"WhatsApp (app)":/EdgA?\//.test(ua)?"Edge":/OPR\/|Opera/.test(ua)?"Opera":/SamsungBrowser/.test(ua)?"Samsung Internet":/Firefox|FxiOS/.test(ua)?"Firefox":/Chrome|CriOS/.test(ua)?"Chrome":/Safari/.test(ua)?"Safari":"outro";
+  let tz="", lang=""; try{ tz=Intl.DateTimeFormat().resolvedOptions().timeZone||""; lang=navigator.language||"" }catch(e){}
+  const S={t0:Date.now(),t1:Date.now(),vid,ret,dev:innerWidth<700?"m":"d",src:srcOf(),os:osOf(),br:brOf(),scr:Math.round(screen.width)+"x"+Math.round(screen.height),tz,lang,dur:0,sec:{},iv:{},ia:{},cartOpen:false,sent:false,maxCart:0,scroll:0};
+  /* local aproximado pelo IP (cidade/estado). O IP é guardado com o último trecho zerado (ex.: 189.12.34.0) */
+  const maskIp=ip=>{ ip=String(ip||""); if(ip.indexOf(":")>-1) return ip.split(":").slice(0,3).join(":")+"::"; const q=ip.split("."); return q.length===4?q.slice(0,3).join(".")+".0":"" };
+  (async()=>{
+    try{
+      let g=null; try{ const c=JSON.parse(localStorage.getItem("ms-geo")||"null"); if(c&&Date.now()-c.t<864e5) g=c.g }catch(e){}
+      if(!g){
+        const ac=new AbortController(); setTimeout(()=>ac.abort(),4000);
+        const r=await fetch("https://ipwho.is/?fields=success,ip,city,region_code,country_code",{signal:ac.signal}); const j=await r.json();
+        if(!j||j.success===false) return; g={ip:maskIp(j.ip),city:j.city||"",reg:j.region_code||"",cc:j.country_code||""};
+        try{ localStorage.setItem("ms-geo",JSON.stringify({t:Date.now(),g})) }catch(e){}
+      }
+      if(g.ip) S.ip=g.ip; if(g.city) S.city=g.city; if(g.reg) S.reg=g.reg; if(g.cc) S.cc=g.cc;
+    }catch(e){}
+  })();
   const clean=k=>String(k).replace(/[.\/\[\]*`~]/g," ").slice(0,80);
   const vis=new Set(), visI=new Set(); let lastAct=Date.now(), ms={sec:{},iv:{}}, adds={};
   /* o que está na faixa central da tela é o que o cliente está lendo */
