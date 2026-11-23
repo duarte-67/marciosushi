@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
+<meta name="author" content="Brotherhood Solutions, em colaboração com Claude (Anthropic)">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Marcio Sushi — Faça seu pedido</title>
 <meta name="description" content="Combos, uramakis, hot rolls e joy feitos com ingredientes de primeira. Monte seu pedido e envie pelo WhatsApp.">
@@ -117,6 +118,16 @@ button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 .sos a{color:var(--burnt);font-weight:700;font-size:16px;text-decoration:none}
 footer,footer.wrap{padding:44px 18px 20px;text-align:center;color:var(--muted);font-size:13px}
 footer strong{color:var(--coal)}
+.credit{margin:34px auto 84px;max-width:320px;text-align:center}
+.credit .orn{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.credit .orn::before,.credit .orn::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(28,27,26,.28))}
+.credit .orn::after{background:linear-gradient(270deg,transparent,rgba(28,27,26,.28))}
+.credit .orn i{width:7px;height:7px;background:var(--orange);transform:rotate(45deg);display:block;box-shadow:0 0 0 3px rgba(240,90,30,.16)}
+.credit .cr-k{margin:0;font-size:10px;font-weight:700;letter-spacing:.32em;text-transform:uppercase;color:var(--muted)}
+.credit .cr-n{margin:6px 0 0;font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.1;letter-spacing:-.01em;color:var(--coal)}
+.credit .cr-n em{font-style:italic;font-weight:500;color:var(--burnt)}
+.credit .cr-c{margin:10px 0 0;font-size:12px;line-height:1.5;color:var(--muted)}
+.credit .cr-c b{color:var(--coal);font-weight:700}
 
 /* cart bar */
 .bar{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:12px 18px calc(12px + env(safe-area-inset-bottom));pointer-events:none}
@@ -232,6 +243,12 @@ textarea{resize:none;min-height:68px}
   <p>Pedidos pelo WhatsApp <strong>(67) 99930-1185</strong></p>
   <p style="margin-top:4px">@marciosushi.oficial</p>
   <p style="margin-top:10px;font-size:11px;opacity:.65;line-height:1.4">Medimos como o cardápio é usado para melhorar a sua experiência: aparelho, tempo na página e localização aproximada (cidade). Não guardamos nome, telefone nem endereço.</p>
+  <div class="credit">
+    <div class="orn" aria-hidden="true"><i></i></div>
+    <p class="cr-k">Site criado por</p>
+    <p class="cr-n">Brotherhood <em>Solutions</em></p>
+    <p class="cr-c">em colaboração com <b>Claude</b>, a IA da Anthropic</p>
+  </div>
 </footer>
 
 <div class="bar" id="bar"><button id="openCart" aria-label="Ver pedido">
