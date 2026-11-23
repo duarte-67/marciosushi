@@ -1587,7 +1587,7 @@ function histRender(){
   }).join("");
 }
 /* ---------- combos: preço e desconto (banco: catalogo/combos; a página de pedidos lê esse documento) ---------- */
-const CB_BASE={"Combo 1":142,"Combo 2":183,"Combo 3":209,"Combo 4":230,"Combo 5":296};
+const CB_BASE={"Combo 1":142,"Combo 2":183,"Combo 3":222,"Combo 4":230,"Combo 5":296};
 const CB={pub:null,work:null,err:"",loaded:false};
 const r2=v=>Math.round(v*100)/100;
 const cbNum=t=>{const v=parseFloat(String(t).replace(/\./g,m=>"").replace(",","."));return isNaN(v)?0:v};
