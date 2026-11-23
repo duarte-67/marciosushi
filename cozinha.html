@@ -454,6 +454,19 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 .sa-b .btn{flex:1;background:#fff;color:var(--burnt);border:2px solid #fff}
 .sa-b .btn.ghost{background:transparent;color:#fff}
 @keyframes sapulse{50%{background:var(--burnt)}}
+.pick{margin:0 0 18px;background:#12301f;border:2px solid var(--ok);border-radius:20px;padding:14px 16px;animation:pkpulse 1.6s 4}
+@keyframes pkpulse{50%{box-shadow:0 0 0 8px rgba(63,174,106,.28)}}
+.pick h2{margin:0 0 10px;font-size:19px;color:#fff;display:flex;align-items:center;gap:8px}
+.pick h2 i{font-style:normal;background:var(--ok);color:#fff;border-radius:99px;padding:2px 11px;font-size:15px}
+.pk{display:flex;align-items:center;gap:12px;background:var(--pearl);color:var(--coal);border-radius:14px;padding:11px 13px;margin-top:8px}
+.pk .pn{font-weight:900;font-size:20px;color:var(--burnt);flex:0 0 auto}
+.pk .pm{flex:1;min-width:0;font-size:14px;line-height:1.35}
+.pk .pm b{display:block;font-size:17px}
+.pk .pm .pt{display:inline-block;background:var(--coal);color:#fff;border-radius:99px;padding:1px 9px;font-size:12px;font-weight:800;margin-right:6px}
+.pk .pm .pt.en{background:var(--orange)}
+.pk .pm .ps{color:#555;font-weight:700}
+.pk .pm a{color:var(--burnt);font-weight:700}
+.pk .btn{flex:0 0 auto;background:var(--ok);border-color:var(--ok);color:#fff;padding:13px 16px;font-size:15px}
 </style>
 </head>
 <body>
@@ -477,6 +490,7 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 
 <main class="wrap">
   <div class="svinfo gerinfo hide" id="gerInfo"></div>
+  <section class="pick hide" id="pickSec" aria-live="polite"></section>
   <section class="new" id="newBox"><details id="newDet" open>
     <summary><h2>Novo pedido confirmado</h2><span class="chev" aria-hidden="true"></span></summary>
     <p>No WhatsApp, copie a mensagem do cliente, cole aqui e confirme. O pedido entra na fila da cozinha, ordenado pelo horário.</p>
@@ -864,7 +878,8 @@ document.addEventListener("click",e=>{
   else if(a==="focus"){ focusId=id; render(); }
   else if(a==="start") patch(id,()=>({status:"preparando",startedAt:Date.now()}));
   else if(a==="finish") patch(id,o=>({status:"pronto",doneAt:Date.now(),items:o.items.map(it=>({...it,done:true}))}));
-  else if(a==="reopen") patch(id,()=>({status:"preparando",doneAt:null}));
+  else if(a==="reopen") patch(id,()=>({status:"preparando",doneAt:null,entregue:null}));
+  else if(a==="hand") patch(id,()=>({entregue:Date.now()}));
   else if(a==="del"){
     if(confirmDel===id){orders=orders.filter(x=>x.id!==id);persistDelete(id);confirmDel=null;render();toast("Pedido removido")}
     else{confirmDel=id;render()}
@@ -968,7 +983,7 @@ function keyUndo(){
   const o=curOrder();
   if(o){const dn=ordIdx(o).filter(i=>o.items[i].done); if(dn.length){const last=dn[dn.length-1]; return patch(o.id,x=>({items:x.items.map((it,k)=>k===last?{...it,done:false}:it)}))}}
   const d=orders.filter(x=>x.status==="pronto").sort((a,b)=>(b.doneAt||0)-(a.doneAt||0))[0];
-  if(d){const ix=ordIdx(d), last=ix[ix.length-1]; focusId=d.id; patch(d.id,x=>({status:"preparando",doneAt:null,items:x.items.map((it,k)=>k===last?{...it,done:false}:it)})); toast(`Pedido #${d.n} reaberto`)}
+  if(d){const ix=ordIdx(d), last=ix[ix.length-1]; focusId=d.id; patch(d.id,x=>({status:"preparando",doneAt:null,entregue:null,items:x.items.map((it,k)=>k===last?{...it,done:false}:it)})); toast(`Pedido #${d.n} reaberto`)}
 }
 const isField=t=>!!t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable);
 document.addEventListener("keydown",e=>{
@@ -1075,7 +1090,7 @@ function render(){
   tickSvInfo();
   document.querySelectorAll("[data-sv]").forEach(b=>b.classList.toggle("on",b.dataset.sv===sview));
   $("#prepView").classList.toggle("hide",!sv);
-  tickClock(); tickStart();
+  tickClock(); tickStart(); renderPick();
   $("#snd").classList.toggle("hide",mode!=="sushiman");
   $("#snd").classList.toggle("on",audioOn);
   $("#snd").textContent=audioOn?"🔔 Aviso sonoro: ligado":"🔔 Aviso sonoro: desligado";
@@ -1341,6 +1356,25 @@ function tickStart(){
     if(now>=startBeepAt){ startBeepAt=now+8000; alarmBeep(); try{navigator.vibrate&&navigator.vibrate([250,120,250])}catch(e){} }
   }else startTitle="";
 }
+/* pedido pronto e embalado: avisa a Gerência para coordenar retirada/entrega */
+const PICKWIN=12*3600000;
+const pickList=()=>orders.filter(o=>o.status==="pronto"&&!o.entregue&&Date.now()-(o.doneAt||0)<PICKWIN).sort((a,b)=>(a.doneAt||0)-(b.doneAt||0));
+let pickHtml="", pickSeen=new Set(), pickTitle="";
+const waitTxt=t=>{const m=Math.max(0,Math.floor((Date.now()-t)/60000)); return m<1?"agora":m<60?`há ${m} min`:`há ${Math.floor(m/60)}h${String(m%60).padStart(2,"0")}`};
+function renderPick(){
+  const el=$("#pickSec"); if(!el) return;
+  const list=mode==="recepcao"?pickList():[];
+  const fresh=list.filter(o=>!pickSeen.has(o.id)); fresh.forEach(o=>pickSeen.add(o.id));
+  const html=list.length?`<h2>📦 Pronto, aguardando retirada ou entrega <i>${list.length}</i></h2>`+list.map(o=>{
+    const en=o.modo==="Entrega";
+    return `<div class="pk"><span class="pn">#${o.n}</span><div class="pm"><b>${esc(o.cliente||"Cliente")}</b><span class="pt${en?" en":""}">${en?"Entrega":"Retirada"}</span><span class="ps" data-since="${o.doneAt||0}">pronto ${waitTxt(o.doneAt||0)}</span>${en&&o.endereco?`<br>📍 ${esc(o.endereco)}${o.mapa?` · <a href="${esc(o.mapa)}" target="_blank" rel="noopener">mapa</a>`:""}`:""}${o.pagamento||o.total?`<br>💳 ${esc(o.pagamento||"—")}${o.total?" · R$ "+esc(o.total):""}`:""}</div><button class="btn" data-act="hand" data-o="${o.id}">${en?"Entregue":"Retirado"} ✓</button></div>`;
+  }).join(""):"";
+  if(html!==pickHtml){ pickHtml=html; el.innerHTML=html; el.classList.toggle("hide",!html) }
+  /* aviso só para pedido que ficou pronto agora (não para os que já estavam prontos ao abrir a página) */
+  if(fresh.some(o=>Date.now()-(o.doneAt||0)<120000)){ alarmBeep(); try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){} toast("📦 Pedido pronto: "+fresh.map(o=>"#"+o.n).join(", ")); el.classList.remove("hide"); el.style.animation="none"; void el.offsetWidth; el.style.animation="" }
+  pickTitle=list.length?`📦 ${list.length} aguardando retirada`:"";
+}
+function tickPick(){ document.querySelectorAll("#pickSec [data-since]").forEach(e=>{e.textContent="pronto "+waitTxt(+e.dataset.since)}) }
 let svHtml="";
 function svInfoHtml(n){
   const act=activeList().slice(0,n||2), now=Date.now(), cur=curOrder();
@@ -1367,7 +1401,7 @@ function tickSvInfo(){
   }
 }
 function tickRuns(){
-  tickClock(); tickStart(); tickSvInfo();
+  tickClock(); tickStart(); tickSvInfo(); tickPick();
   const now=Date.now(); let ring=null;
   allRuns().forEach(r=>{ if(r.dur>0&&now-r.t0>=r.dur*60000&&!silenced.has(r.id)&&!ring) ring=r });
   document.querySelectorAll(".rt").forEach(e=>{
@@ -1385,6 +1419,7 @@ function tickRuns(){
     if(now-lastAlarm>=3500){ lastAlarm=now; alarmBeep(); try{navigator.vibrate&&navigator.vibrate([250,120,250])}catch(e){} }
     document.title="⏰ Retire: "+PREP[ring.k].t;
   }else if(startTitle){ if(document.title!==startTitle) document.title=startTitle }
+  else if(pickTitle&&mode==="recepcao"){ if(document.title!==pickTitle) document.title=pickTitle }
   else if(document.title!==titleBase) document.title=titleBase;
 }
 setInterval(tickRuns,1000);
