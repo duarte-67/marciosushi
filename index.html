@@ -166,6 +166,12 @@ footer strong{color:var(--coal)}
 .seg label{position:relative}
 .seg input{position:absolute;opacity:0;inset:0}
 .seg span{display:block;text-align:center;padding:12px 8px;border-radius:14px;border:1.5px solid var(--line);background:#fff;font-weight:600;font-size:14px;transition:.15s}
+.seg small.nfc{display:block;font-size:10.5px;font-weight:700;letter-spacing:.02em;color:var(--burnt);margin-top:2px}
+#pag label{display:flex}
+#pag span{flex:1;display:flex;flex-direction:column;justify-content:center}
+.nfcwarn{display:none;margin-top:10px;background:rgba(240,90,30,.1);border:1.5px solid var(--orange);border-radius:14px;padding:11px 13px;font-size:13.5px;line-height:1.4;color:var(--coal)}
+.nfcwarn b{display:block;font-size:14.5px;color:var(--burnt);margin-bottom:2px}
+.nfcwarn.show{display:block}
 .seg input:checked+span{border-color:var(--orange);background:rgba(240,90,30,.08);color:var(--burnt)}
 .seg input:focus-visible+span{outline:2px solid var(--coal);outline-offset:2px}
 input[type=text],input[type=time],textarea{width:100%;font:inherit;font-size:16px;padding:13px 14px;border-radius:14px;border:1.5px solid var(--line);background:#fff;color:var(--coal)}
@@ -277,9 +283,10 @@ textarea{resize:none;min-height:68px}
       <span class="lbl">Pagamento</span>
       <div class="seg" id="pag">
         <label><input type="radio" name="pag" value="Pix" checked><span>Pix</span></label>
-        <label><input type="radio" name="pag" value="Cartão"><span>Cartão</span></label>
+        <label><input type="radio" name="pag" value="Cartão"><span>Cartão<small class="nfc">só aproximação</small></span></label>
         <label><input type="radio" name="pag" value="Dinheiro"><span>Dinheiro</span></label>
       </div>
+      <div class="nfcwarn" id="nfcWarn" role="note"><b>📲 Cartão somente por aproximação</b>Nossa maquininha aceita apenas cartão ou celular por aproximação. <u>Não aceitamos cartão de inserir (com chip e senha).</u></div>
 
       <span class="lbl">Observações (opcional)</span>
       <textarea id="obs" placeholder="Ex.: sem cebolinha, enviar shoyu extra…"></textarea>
@@ -590,7 +597,7 @@ function message(ids, sub, del){
   L.push(modo()==="Entrega" ? `${MSG.endereco} ${$("#end").value.trim()} — ${cidade()}${aCombinar()?" (Mais Delivery)":""}` : MSG.retirada);
   if(modo()==="Entrega" && loc) L.push(`${MSG.localizacao} ${mapsUrl(loc)}`);
   L.push(`${MSG.horario} ${hor()==="hora" ? MSG.hoje+" "+$("#hora").value : MSG.asap}`);
-  L.push(`${MSG.pagamento} ${pag()}`);
+  L.push(`${MSG.pagamento} ${pag()}${pag()==="Cartão"?" (somente aproximação)":""}`);
   const o=$("#obs").value.trim(); if(o) L.push(`${MSG.obs} ${o}`);
   L.push("", MSG.fecho);
   return L.join("\n");
@@ -604,6 +611,7 @@ function missing(){
 }
 
 function update(ids, sub, del){
+  $("#nfcWarn").classList.toggle("show", pag()==="Cartão");
   $("#horBox").style.display = hor()==="hora" ? "" : "none";
   ids = ids || Object.keys(cart).filter(k=>cart[k]>0);
   if(!ids.length) return;
