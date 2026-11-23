@@ -115,6 +115,18 @@ footer strong{color:var(--coal)}
 /* sheet */
 .ov{position:fixed;inset:0;background:rgba(28,27,26,.55);z-index:40;opacity:0;pointer-events:none;transition:.25s}
 .ov.show{opacity:1;pointer-events:auto}
+.lh{position:fixed;inset:0;z-index:80;background:rgba(28,27,26,.62);display:none;align-items:flex-end;justify-content:center;padding:14px}
+.lh.show{display:flex}
+.lh .box{background:var(--pearl);color:var(--coal);border-radius:22px;max-width:440px;width:100%;padding:20px 20px 16px;box-shadow:0 24px 60px rgba(0,0,0,.45);max-height:88vh;overflow:auto}
+.lh h3{font-family:var(--serif);font-size:21px;margin:0 0 6px}
+.lh p{margin:0 0 10px;font-size:15px;line-height:1.45}
+.lh ol{margin:0 0 12px;padding-left:22px;font-size:15px;line-height:1.5}
+.lh li{margin:4px 0}
+.lh .tip{background:rgba(240,90,30,.1);border:1px solid rgba(240,90,30,.3);border-radius:12px;padding:9px 12px;font-size:13.5px;margin:0 0 12px}
+.lh .lhb{display:grid;gap:8px}
+.lh .lhb button{padding:14px;border-radius:99px;font-weight:700;font-size:16px;font-family:inherit}
+.lh .lhb .lhpri{background:var(--orange);color:#fff}
+.lh .lhb .lhsec{background:transparent;color:var(--coal);border:1.5px solid rgba(28,27,26,.25)}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--pearl);border-radius:26px 26px 0 0;max-height:92vh;display:flex;flex-direction:column;transform:translateY(105%);transition:transform .35s cubic-bezier(.2,.9,.3,1);max-width:720px;margin:0 auto}
 .sheet.show{transform:none}
 .sh-head{display:flex;justify-content:space-between;align-items:center;padding:20px 22px 10px}
@@ -187,6 +199,8 @@ textarea{resize:none;min-height:68px}
 </div></section>
 
 <main class="wrap" id="menu"></main>
+
+<div class="lh" id="lh" role="dialog" aria-modal="true" aria-labelledby="lhT"><div class="box"><h3 id="lhT"></h3><p id="lhP"></p><div id="lhIn"></div><ol id="lhS"></ol><div class="tip" id="lhTip" style="display:none"></div><div class="lhb"><button type="button" class="lhpri" id="lhRetry">Tentar de novo</button><button type="button" class="lhsec" id="lhType">Prefiro digitar o endereço</button></div></div></div>
 
 <footer class="wrap">
   <div class="sos">
@@ -678,13 +692,41 @@ function locUI(){
   }
   update();
 }
+/* aviso para ligar a localização: a página não consegue ligar o GPS sozinha, então explica o passo a passo */
+const UA_=navigator.userAgent||"", IOS_=/iPhone|iPad|iPod/.test(UA_), AND_=/Android/.test(UA_), INAPP_=/Instagram|FBAN|FBAV|WhatsApp/.test(UA_);
+function locHelp(kind){
+  const T={
+    off:["📍 Ligue a localização do celular","A localização do seu aparelho parece estar desligada, e sem ela não conseguimos marcar o ponto da entrega."],
+    denied:["📍 Libere a localização para este site","O navegador está bloqueando a localização para esta página."],
+    timeout:["📍 Não achamos sua localização","Demorou para encontrar o sinal. Vá para perto de uma janela ou de um lugar aberto e tente de novo."]
+  }[kind]||[];
+  const S=IOS_?{
+    off:["Abra os <b>Ajustes</b> do iPhone","Toque em <b>Privacidade e Segurança → Serviços de Localização</b> e ligue","Volte aqui e toque em <b>Tentar de novo</b>"],
+    denied:["Abra os <b>Ajustes</b> do iPhone","Em <b>Privacidade e Segurança → Serviços de Localização</b>, confira se está ligado e se o <b>Safari</b> (ou seu navegador) está em <b>Ao usar o app</b>","Volte aqui e toque em <b>Tentar de novo</b>, e escolha <b>Permitir</b> quando perguntar"]
+  }:AND_?{
+    off:["Deslize a tela <b>de cima para baixo</b>","Toque em <b>Localização</b> para ligar","Volte aqui e toque em <b>Tentar de novo</b>"],
+    denied:["Toque no <b>cadeado</b> (ou ícone de ajustes) ao lado do endereço do site","Escolha <b>Permissões → Localização → Permitir</b>","Confira também se a <b>Localização</b> do celular está ligada (puxe a tela de cima para baixo)","Volte e toque em <b>Tentar de novo</b>"]
+  }:{
+    off:["Ative a localização do aparelho nas configurações","Volte aqui e toque em <b>Tentar de novo</b>"],
+    denied:["Clique no <b>cadeado</b> ao lado do endereço do site","Em <b>Localização</b>, escolha <b>Permitir</b>","Volte aqui e toque em <b>Tentar de novo</b>"]
+  };
+  const steps=kind==="timeout"?["Confirme que a <b>Localização</b> do celular está ligada","Fique em um lugar aberto por alguns segundos","Toque em <b>Tentar de novo</b>"]:(S[kind==="denied"?"denied":"off"]);
+  $("#lhT").textContent=T[0]||"📍 Precisamos da sua localização"; $("#lhP").textContent=T[1]||"";
+  $("#lhS").innerHTML=steps.map(x=>`<li>${x}</li>`).join("");
+  const tip=$("#lhTip"); tip.style.display=INAPP_?"block":"none"; if(INAPP_) tip.innerHTML="Você abriu o link <b>dentro de um aplicativo</b> (Instagram, Facebook ou WhatsApp). Nele a localização costuma não funcionar: toque nos <b>três pontinhos</b> e escolha <b>Abrir no navegador</b>.";
+  $("#lh").classList.add("show");
+}
+const lhClose=()=>$("#lh").classList.remove("show");
+$("#lhRetry").addEventListener("click",()=>{ lhClose(); locAsk() });
+$("#lhType").addEventListener("click",()=>{ lhClose(); const e=$("#end"); if(e) e.focus() });
+$("#lh").addEventListener("click",e=>{ if(e.target.id==="lh") lhClose() });
 function locAsk(){
   const b=$("#locBtn"), n=$("#locNote");
   if(!navigator.geolocation){ n.textContent="Este aparelho/navegador não permite localização. Digite o endereço completo abaixo."; return }
   b.classList.add("busy"); $("#locTxt").textContent="Buscando sua localização…";
   navigator.geolocation.getCurrentPosition(
     p=>{ loc={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy||0}; locUI() },
-    e=>{ loc=null; locUI();
+    e=>{ loc=null; locUI(); locHelp(e.code===1?"denied":e.code===3?"timeout":"off");
       n.textContent = e.code===1 ? "Sem permissão para a localização. Libere nas configurações do navegador ou digite o endereço completo abaixo."
                     : e.code===3 ? "Demorou demais para achar sua localização. Tente de novo ou digite o endereço abaixo."
                     : "Não consegui pegar sua localização. Tente de novo ou digite o endereço abaixo." },
@@ -813,5 +855,6 @@ storeStatus(); setInterval(storeStatus, 30000);
   addEventListener("pagehide",flush);
 })();
 </script>
+
 </body>
 </html>
