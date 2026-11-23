@@ -170,7 +170,7 @@ textarea:focus,input:focus{outline:none;border-color:var(--orange)}
 .mdl.hide{display:none}
 .mbox{background:var(--ink2);border:1px solid var(--line);border-radius:20px;padding:20px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .mbox h3{margin:0 0 8px;font-size:20px;color:#fff}
-.mbox p{margin:0 0 12px;font-size:15px;line-height:1.45;color:var(--pearl)}
+.mbox p{margin:0 0 12px;font-size:15px;line-height:1.45;color:var(--pearl);white-space:pre-line}
 .mbox .mchk{display:flex;gap:10px;align-items:flex-start;margin:0 0 14px;padding:10px 12px;background:var(--ink);border:1px solid var(--line);border-radius:12px;font-size:14px;cursor:pointer}
 .mbox .mchk input{width:20px;height:20px;flex:0 0 auto;margin-top:1px}
 .mbox #mType{width:100%;padding:12px 14px;font-size:16px;margin:0 0 14px;background:var(--ink);color:var(--pearl);border:1px solid var(--late);border-radius:12px;font-family:inherit;text-transform:uppercase}
@@ -190,6 +190,13 @@ textarea:focus,input:focus{outline:none;border-color:var(--orange)}
 .ana .tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px}
 .ana .tr b{font-weight:700}.ana .tr span{color:var(--muted);font-size:12.5px}.ana .tr em{font-style:normal;font-weight:700;text-align:right}
 .ana .tr.bad em{color:#ff8b8e}.ana .tr.good em{color:#6fe0a0}
+.cbp .cbrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 10px;background:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
+.cbp .cbrow>b{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:16px}
+.cbp .cbrow>b i{font-style:normal;background:var(--orange);color:#fff;border-radius:99px;padding:1px 9px;font-size:12px}
+.cbp .cbrow label{display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.cbp .cbrow input{width:100%;padding:10px 10px;font-size:16px;background:var(--ink2);color:var(--pearl);border:1px solid var(--line);border-radius:10px;font-family:inherit}
+.cbp .cbrow input:focus{outline:2px solid var(--orange)}
+.cbp .cbact{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 .hdel{margin-top:10px;font-size:13px;padding:9px 14px;color:#ff8b8e;border-color:#6a2b2d}
 .hbar .hall{color:#ff8b8e;border-color:#6a2b2d}
 .prep{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-left:auto}
@@ -570,6 +577,16 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
   <section class="sec" id="doneSec">
     <h3><span id="doneTitle">Prontos</span><button class="btn ghost" id="clean">Limpar prontos</button></h3>
     <div class="grid" id="done"></div>
+  </section>
+
+  <section class="sec hide" id="cbSec">
+    <details class="cfg hist cbp" id="cbDet"><summary>🏷️ Combos: preços e desconto <small id="cbSum"></small></summary>
+      <div class="histbody">
+        <p class="hmsg" style="margin-top:0">Mude o preço normal ou dê desconto só nos combos. O desconto aparece para o cliente com o preço antigo riscado. Só vale depois de apertar “Publicar”.</p>
+        <div id="cbList"></div>
+        <div class="cbact"><button class="btn" id="cbPub">Publicar preços</button><button class="btn ghost" id="cbZero">Zerar todos os descontos</button><button class="btn ghost" id="cbReload">Descartar mudanças</button></div>
+      </div>
+    </details>
   </section>
 
   <section class="sec hide" id="anaSec">
@@ -1170,6 +1187,7 @@ function render(){
   $("#doneSec").classList.toggle("hide",!dn.length||kan||pain||sv);
   $("#histSec").classList.toggle("hide",kan||pain||sv);
   $("#anaSec").classList.toggle("hide",kan||pain||sv);
+  $("#cbSec").classList.toggle("hide",kan||pain||sv);
   $("#doneTitle").textContent=`Prontos (${dn.length})`;
   $("#done").innerHTML=dn.map(o=>ticket(o,rec)).join("");
   if(!shared&&!srv) setSync(false);
@@ -1563,6 +1581,59 @@ function histRender(){
     return `<div class="hday"><h4>${esc(dayLbl(os[0].createdAt||0))}<span>${os.length} ${os.length===1?"pedido":"pedidos"} · ${brl(dt)}</span></h4>`+os.map(o=>`<details class="hrow"><summary><span class="ht">${hhmm(o.createdAt||0)}</span><b>#${o.n||"?"} ${esc(o.cliente||"Sem nome")}</b><span class="hm">${esc(o.modo||"")}</span><span class="hv">${o.total?"R$ "+esc(o.total):"—"}</span><span class="hs ${o.status==="pronto"?"ok":""}">${o.status==="pronto"?"pronto":"em andamento"}</span></summary><div class="hd">${histItems(o)}<p class="hx">${o.endereco?"📍 "+esc(o.endereco)+" · ":""}${o.pagamento?"💳 "+esc(o.pagamento)+" · ":""}${o.horario?"🕒 "+esc(o.horario):""}${o.obs?"<br>📝 "+esc(o.obs):""}${o.mapa?`<br><a href="${esc(o.mapa)}" target="_blank" rel="noopener">Ver no mapa</a>`:""}</p>${H.local?"":`<button class="btn ghost hdel" data-hdel="${o.id}">🗑 Excluir do histórico</button>`}</div></details>`).join("")+"</div>";
   }).join("");
 }
+/* ---------- combos: preço e desconto (banco: catalogo/combos; a página de pedidos lê esse documento) ---------- */
+const CB_BASE={"Combo 1":142,"Combo 2":183,"Combo 3":209,"Combo 4":230,"Combo 5":296};
+const CB={pub:null,work:null,err:"",loaded:false};
+const r2=v=>Math.round(v*100)/100;
+const cbNum=t=>{const v=parseFloat(String(t).replace(/\./g,m=>"").replace(",","."));return isNaN(v)?0:v};
+const cbFinal=c=>r2(c.preco*(1-(c.pct||0)/100));
+const pcShow=v=>String(Math.round(v*10)/10).replace(".",",");
+function cbFromDoc(d){ const o={}; Object.keys(CB_BASE).forEach(k=>{ const c=d&&d.items&&d.items[k]; o[k]={preco:c&&c.preco>0?+c.preco:CB_BASE[k],pct:c&&c.pct>0?+c.pct:0} }); return o }
+async function cbLoad(){
+  CB.err="";
+  try{
+    if(!shared||!dbRef){ CB.err="Sem conexão com o banco: faça login para mudar os preços."; CB.pub=cbFromDoc(null) }
+    else{ const d=await dbRef.collection("catalogo").doc("combos").get(); CB.pub=cbFromDoc(d.exists?d.data():null) }
+  }catch(e){ console.warn(e); CB.pub=cbFromDoc(null); CB.err=e&&e.code==="permission-denied"?"Sem permissão para ler os preços. Libere a coleção 'catalogo' nas regras do Firebase.":"Não foi possível carregar os preços." }
+  CB.work=JSON.parse(JSON.stringify(CB.pub)); CB.loaded=true; cbRender();
+}
+function cbSum(){ const n=CB.pub?Object.values(CB.pub).filter(c=>c.pct>0).length:0; $("#cbSum").textContent=CB.pub?(n?`${n} com desconto no ar`:"sem desconto no ar"):"" }
+function cbRender(){
+  const L=$("#cbList"); if(!L) return; cbSum();
+  if(!CB.work){ L.innerHTML='<p class="hmsg">Carregando…</p>'; return }
+  const dirty=JSON.stringify(CB.work)!==JSON.stringify(CB.pub);
+  L.innerHTML=(CB.err?`<p class="hmsg err">${esc(CB.err)}</p>`:"")+Object.keys(CB_BASE).map(k=>{const c=CB.work[k];
+    return `<div class="cbrow" data-k="${esc(k)}"><b>${esc(k)}${c.pct>0?`<i>−${pcShow(c.pct)}%</i>`:""}</b>
+      <label>Preço normal (R$)<input data-f="preco" inputmode="decimal" value="${String(c.preco).replace(".",",")}"></label>
+      <label>Desconto (%)<input data-f="pct" inputmode="decimal" value="${c.pct?pcShow(c.pct):""}" placeholder="0"></label>
+      <label>Preço final (R$)<input data-f="final" inputmode="decimal" value="${String(cbFinal(c)).replace(".",",")}"></label></div>`}).join("");
+  $("#cbPub").disabled=!dirty; $("#cbPub").style.opacity=dirty?1:.5;
+}
+(()=>{
+  const d=$("#cbDet"); if(!d) return;
+  d.addEventListener("toggle",()=>{ if(d.open) cbLoad() });
+  $("#cbList").addEventListener("change",e=>{
+    const i=e.target.closest("[data-f]"); if(!i||!CB.work) return; const k=i.closest("[data-k]").dataset.k, c=CB.work[k], v=cbNum(i.value);
+    if(i.dataset.f==="preco"){ if(v>0) c.preco=r2(v) }
+    else if(i.dataset.f==="pct"){ c.pct=Math.max(0,Math.min(90,Math.round(v*100)/100)) }
+    else if(v>0&&v<=c.preco){ c.pct=Math.round((1-v/c.preco)*1000000)/10000 }   // digitou o preço final: calcula o desconto
+    cbRender();
+  });
+  $("#cbZero").addEventListener("click",()=>{ if(!CB.work) return; Object.values(CB.work).forEach(c=>c.pct=0); cbRender() });
+  $("#cbReload").addEventListener("click",()=>{ if(CB.pub){ CB.work=JSON.parse(JSON.stringify(CB.pub)); cbRender() } });
+  $("#cbPub").addEventListener("click",async()=>{
+    if(!CB.work||!shared||!dbRef){ toast("Sem conexão com o banco."); return }
+    const ch=Object.keys(CB_BASE).filter(k=>JSON.stringify(CB.work[k])!==JSON.stringify(CB.pub[k]));
+    if(!ch.length){ toast("Nada mudou"); return }
+    const r=await askConfirm({title:"Publicar os novos preços?",text:"Os clientes passam a ver estes valores na página de pedidos agora:\n"+ch.map(k=>`${k}: ${brl(cbFinal(CB.work[k]))}${CB.work[k].pct>0?` (${pcShow(CB.work[k].pct)}% de desconto sobre ${brl(CB.work[k].preco)})`:""}`).join("\n"),ok:"Publicar"});
+    if(!r) return;
+    try{
+      await dbRef.collection("catalogo").doc("combos").set({items:JSON.parse(JSON.stringify(CB.work)),updatedAt:Date.now()});
+      CB.pub=JSON.parse(JSON.stringify(CB.work)); cbRender(); toast("Preços publicados");
+    }catch(e){ console.warn(e); toast(e&&e.code==="permission-denied"?"Falta liberar a coleção 'catalogo' nas regras do Firebase.":"Não foi possível publicar. Tente de novo.") }
+  });
+})();
+
 /* ---------- comportamento dos clientes (medido na página de pedidos) ---------- */
 const A={range:"7",rows:[],loading:false,err:"",local:false};
 async function anaLoad(){
