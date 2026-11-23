@@ -939,21 +939,22 @@ function baseView(act){
   act.forEach(o=>o.items.forEach((it,i)=>{
     if(it.done) return;
     const {base,topo,esp}=baseOf(it), key=it.cat+"|"+norm(base), w=waitOf(o,it);
-    const g=B[key]=B[key]||{cat:it.cat,base,first:o.dueAt,pcs:0,q:0,vars:{}};
+    const g=B[key]=B[key]||{cat:it.cat,base,first:o.dueAt,pcs:0,q:0,vars:{},tier:9};
     g.first=Math.min(g.first,o.dueAt);
-    const vk=it.nome+(w.length?"|w":""), v=g.vars[vk]=g.vars[vk]||{nome:it.nome,topo,esp,pcs:0,q:0,parts:[],keys:[],wait:[]};
+    const vk=it.nome+(w.length?"|w":""), v=g.vars[vk]=g.vars[vk]||{nome:it.nome,topo,esp,pcs:0,q:0,parts:[],keys:[],wait:[],tier:tierOf(it)};
+    g.tier=Math.min(g.tier,v.tier);
     w.forEach(k=>{ if(!v.wait.includes(k)) v.wait.push(k) });
     const p=pcsOf(it); g.pcs+=p; g.q+=it.q; v.pcs+=p; v.q+=it.q; v.parts.push({o,q:it.q,from:it.from}); v.keys.push(o.id+":"+i);
   }));
-  Object.values(B).forEach(g=>{ g.vs=Object.values(g.vars).sort((a,b)=>(a.wait.length>0)-(b.wait.length>0)||b.q-a.q); g.rank=g.vs.some(v=>!v.wait.length)?0:1 });
+  Object.values(B).forEach(g=>{ g.vs=Object.values(g.vars).sort((a,b)=>a.tier-b.tier||(a.wait.length>0)-(b.wait.length>0)||b.q-a.q); g.rank=g.vs.some(v=>!v.wait.length)?0:1 });
   let firstV=true;
-  const gs=Object.values(B).sort((a,b)=>a.rank-b.rank||a.first-b.first);
-  const nOk=gs.filter(g=>g.rank===0).length, nWait=gs.length-nOk;
+  const gs=Object.values(B).sort((a,b)=>a.tier-b.tier||a.rank-b.rank||a.first-b.first);
+  const nTiers=new Set(gs.map(g=>g.tier)).size;
   const ready=orders.filter(o=>o.status!=="pronto"&&o.items.length&&o.items.every(i=>i.done));
   const totalPcs=gs.reduce((a,g)=>a+g.pcs,0);
   let h=gs.map((g,gi)=>{
     const vs=g.vs, multi=vs.length>1, hasEsp=vs.some(v=>v.esp);
-    const div=(nOk&&nWait)?(gi===0?`<div class="bdiv ok">✅ Pode fazer agora · ingredientes prontos</div>`:(gi===nOk?`<div class="bdiv">⏳ Depois · esperam a Gerência preparar (grelhar, fritar, couve, amêndoa)</div>`:"")):"";
+    const div=(nTiers>1&&(gi===0||gs[gi-1].tier!==g.tier))?`<div class="bdiv${g.tier===0?" ok":""}">${TIERLBL[g.tier]||""}</div>`:"";
     const big=g.pcs?g.pcs:g.q, unit=g.pcs?(g.pcs===1?"peça":"peças"):"un";
     return div+`<section class="bc${g.rank?" wait":""}"><div class="bh"><div><h3>${typeOf(g.cat)?`<span class="ty">${esc(typeOf(g.cat))}</span> `:""}${esc(g.base)}</h3>${multi?`<small class="mb">mesma base</small>`:""}</div><div class="bn">${big}<small>${unit}</small></div></div>
       ${multi?`<div class="bnote">Faça a base de ${g.pcs} peças de uma vez e depois finalize cada versão.</div>`:""}
@@ -974,14 +975,25 @@ const activeList=()=>orders.filter(o=>o.status!=="pronto").sort((a,b)=>a.dueAt-b
 const curOrder=()=>{const a=activeList();return a.find(o=>o.id===focusId)||a[0]||null};
 const typeOf=cat=>{const c=CATS.find(x=>x[1]===cat);return c?c[0]:""};
 const fullName=it=>{const c=CATS.find(x=>x[1]===it.cat);return c?c[0]+" "+it.nome:it.nome};
+/* ordem do Sushiman: 0 simples (hossomaki, filadélfia, niguiri, joy tradicional, sashimi) · 1 com complemento (no meio) · 2 hot temaki · 3 maçaricados (por último) */
+const TIERLBL=["① Simples · faça primeiro","② Com complemento · no meio","③ Hot Temaki · perto do fim","④ Maçaricados · por último"];
+function tierOf(it){
+  const n=norm(it.nome), c=it.cat;
+  if(/macaricad/.test(n)) return 3;
+  if(/hot temaki/.test(n)) return 2;
+  if(c==="Hossomakis"||c==="Niguiri"||c==="Sashimi"||/ni(gu|g)iri/.test(n)) return 0;
+  if(c==="Uramakis"&&n==="filadelfia") return 0;
+  if(c==="Joy"&&/^(salmao )?tradicional$/.test(n)) return 0;
+  return 1;
+}
 function displayGroups(o){
   const cb={}, cbOrder=[], av={};
   o.items.forEach((it,i)=>{
     if(it.from){ if(!cb[it.from]){cb[it.from]={combo:true,label:it.from,fq:it.fq||0,list:[]};cbOrder.push(it.from)} cb[it.from].list.push([it,i]) }
-    else (av[it.cat]=av[it.cat]||[]).push([it,i]);
+    else { const k=tierOf(it)+"|"+it.cat; (av[k]=av[k]||[]).push([it,i]) }
   });
-  const out=cbOrder.map(k=>{const g=cb[k]; g.list.sort((a,b)=>catOrder(a[0].cat)-catOrder(b[0].cat)); g.pcs=g.list.reduce((a,x)=>a+pcsOf(x[0]),0); return g});
-  Object.keys(av).sort((a,b)=>catOrder(a)-catOrder(b)).forEach(c=>out.push({combo:false,label:c,list:av[c]}));
+  const out=cbOrder.map(k=>{const g=cb[k]; g.list.sort((a,b)=>tierOf(a[0])-tierOf(b[0])||catOrder(a[0].cat)-catOrder(b[0].cat)); g.pcs=g.list.reduce((a,x)=>a+pcsOf(x[0]),0); return g});
+  Object.keys(av).sort((a,b)=>(+a.split("|")[0])-(+b.split("|")[0])||catOrder(a.split("|")[1])-catOrder(b.split("|")[1])).forEach(k=>out.push({combo:false,label:k.split("|")[1],list:av[k]}));
   return out;
 }
 function ordIdx(o){return displayGroups(o).flatMap(g=>g.list.map(x=>x[1]))}
