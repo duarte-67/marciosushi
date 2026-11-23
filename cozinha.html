@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<script>try{ if(top!==self && /(^|\.)marciosushi\.delivery$/.test(location.hostname)){ document.documentElement.style.display="none"; top.location.replace(self.location.href) } }catch(e){ document.documentElement.style.display="none" }</script>
 <title>Marcio Sushi — Cozinha</title>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png">
@@ -629,6 +631,7 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 const KEY="ms-kitchen-orders", MODEKEY="ms-kitchen-mode";
 const CATS=[["Uramaki","Uramakis"],["Hossomaki","Hossomakis"],["Hot Roll","Hot Rolls"],["Joy","Joy"],["Niguiri","Niguiri"],["Temaki","Temakis"],["Sashimi","Sashimi"]];
 const $=s=>document.querySelector(s);
+const mapOk=u=>{ try{ const x=new URL(String(u||"")); const h=x.hostname.toLowerCase(), p=x.pathname; return x.protocol==="https:"&&((/^(www\.)?google\.com(\.br)?$/.test(h)&&p.indexOf("/maps")===0)||h==="maps.google.com"||h==="maps.app.goo.gl"||(h==="goo.gl"&&p.indexOf("/maps")===0)) }catch(e){ return false } };
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 
@@ -709,7 +712,7 @@ function persistDelete(id){ if(srv) return srvOp("del",{id}); if(shared) return 
 function attachDb(db){
   dbRef=db; shared=true;
   return db.collection("orders").onSnapshot(snap=>{
-    orders=snap.docs.map(d=>({id:d.id,...d.data()}));
+    orders=snap.docs.map(d=>{const o={id:d.id,...d.data()}; if(o.mapa&&!mapOk(o.mapa)) o.mapa=""; return o});
     if(!histBackfill){ histBackfill=true; orders.forEach(archive) }
     if(seen===null||!shared_first){seen=new Set(orders.map(o=>o.id));shared_first=true}
     setSync(true); render();
@@ -871,7 +874,7 @@ function parseOrder(raw){
     }else if((m=l.match(/^Total:?\s*R\$\s*([\d.]+,\d{2})/i))) o.total=m[1];
     else if((m=l.match(/^Nome:\s*(.+)/i))) o.cliente=m[1];
     else if((m=l.match(/^(?:Endere[çc]o|Entrega em):\s*(.+)/i))) o.endereco=m[1];
-    else if((m=l.match(/^Localiza[çc][aã]o[^:]*:\s*(https?:\/\/\S+)/i))) o.mapa=m[1];
+    else if((m=l.match(/^Localiza[çc][aã]o[^:]*:\s*(https?:\/\/\S+)/i))) o.mapa=mapOk(m[1])?m[1]:"";
     else if(/^Retirada/i.test(l)) retirada=true;
     else if((m=l.match(/^Hor[aá]rio:\s*(.+)/i))) o.horario=m[1];
     else if((m=l.match(/^Pagamento:\s*(.+)/i))) o.pagamento=m[1];
@@ -1005,7 +1008,7 @@ function baseView(act){
       ${multi?`<div class="bnote">Faça a base de ${g.pcs} peças de uma vez e depois finalize cada versão.</div>`:""}
       ${vs.map(v=>`<div class="vr"><div><div class="vn"><b>${v.pcs?v.pcs+" "+(v.pcs===1?"peça":"peças"):v.q+"×"}</b> · ${esc((typeOf(g.cat)?typeOf(g.cat)+" ":"")+v.nome)}</div>
         <small>${v.topo?esc(v.topo):(hasEsp?"sem cobertura extra":"")}</small>
-        ${v.wait.length?`<small class="wt">⏳ ${v.wait.map(k=>k==="hot"?`Aguardando ${/^hot/i.test(v.nome)?v.nome:(typeOf(g.cat)?typeOf(g.cat)+" ":"")+v.nome} fritar`:PREP[k].chip[0]).join(" · ")}</small>`:""}
+        ${v.wait.length?`<small class="wt">⏳ ${v.wait.map(k=>k==="hot"?`Aguardando ${esc(/^hot/i.test(v.nome)?v.nome:(typeOf(g.cat)?typeOf(g.cat)+" ":"")+v.nome)} fritar`:PREP[k].chip[0]).join(" · ")}</small>`:""}
         <small>${v.parts.map(x=>`${who(x.o)} ${x.q>1?"×"+x.q+" ":""}${x.from?"· "+esc(x.from)+" ":""}· ${hhmm(x.o.dueAt)}`).join(" &nbsp;|&nbsp; ")}</small></div>
         <button class="btn${(()=>{const f=firstV&&!v.wait.length; if(f) firstV=false; v._f=f; return f?" kfirst":""})()}" data-act="vdone" data-k="${v.keys.join(";")}">Feito ✓${v._f?`<kbd>Espaço</kbd>`:""}</button></div>`).join("")}
     </section>`;
@@ -1551,9 +1554,9 @@ async function histLoad(){
       H.local=false; const since=histSince(); let rows;
       try{
         let q=dbRef.collection("historico"); if(since) q=q.where("createdAt",">=",since);
-        const snap=await q.orderBy("createdAt","desc").limit(2000).get(); rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+        const snap=await q.orderBy("createdAt","desc").limit(2000).get(); rows=snap.docs.map(d=>{const o={id:d.id,...d.data()}; if(o.mapa&&!mapOk(o.mapa)) o.mapa=""; return o});
       }catch(e1){
-        const snap=await dbRef.collection("historico").get(); rows=snap.docs.map(d=>({id:d.id,...d.data()})).filter(o=>(o.createdAt||0)>=since);
+        const snap=await dbRef.collection("historico").get(); rows=snap.docs.map(d=>{const o={id:d.id,...d.data()}; if(o.mapa&&!mapOk(o.mapa)) o.mapa=""; return o}).filter(o=>(o.createdAt||0)>=since);
       }
       H.rows=rows;
     }
@@ -1740,7 +1743,7 @@ async function anaReset(){
 }
 function anaCsv(){
   const R=A.rows.slice().sort((a,b)=>(b.t0||0)-(a.t0||0)); if(!R.length){ toast("Nada para baixar neste período"); return }
-  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const q=v=>{ v=String(v??""); if(/^[=+\-@\t\r]/.test(v)) v="'"+v; return '"'+v.replace(/"/g,'""')+'"' };
   const head=["Data","Hora","Cidade","UF","País","IP (parcial)","Sistema","Navegador","Tela","Origem","Já tinha voltado","Segundos na página","Itens adicionados","Abriu o pedido","Enviou o pedido"];
   const lines=R.map(r=>{const d=new Date(r.t0||0); return [d.toLocaleDateString("pt-BR"),hhmm(r.t0||0),r.city,r.reg,r.cc,r.ip,r.os,r.br,r.scr,r.src,r.ret?"sim":"não",r.dur,sumObj(r.ia),r.cartOpen?"sim":"não",r.sent?"sim":"não"].map(q).join(";")});
   const blob=new Blob(["\ufeff"+[head.map(q).join(";")].concat(lines).join("\r\n")],{type:"text/csv;charset=utf-8"});
@@ -1748,7 +1751,7 @@ function anaCsv(){
 }
 function histCsv(){
   const rows=histFiltered(); if(!rows.length){ toast("Nada para baixar neste período"); return }
-  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const q=v=>{ v=String(v??""); if(/^[=+\-@\t\r]/.test(v)) v="'"+v; return '"'+v.replace(/"/g,'""')+'"' };
   const head=["Data","Hora","Pedido","Cliente","Tipo","Endereço","Pagamento","Total (R$)","Situação","Itens","Observação"];
   const lines=rows.map(o=>{const d=new Date(o.createdAt||0); return [d.toLocaleDateString("pt-BR"),hhmm(o.createdAt||0),o.n,o.cliente,o.modo,o.endereco,o.pagamento,o.total,o.status==="pronto"?"pronto":"em andamento",(o.items||[]).filter(i=>!i.from).map(i=>i.q+"x "+fullName(i)).concat([...new Set((o.items||[]).filter(i=>i.from).map(i=>i.from+(i.fq>1?" x"+i.fq:"")))]).join("; "),o.obs].map(q).join(";")});
   const blob=new Blob(["\ufeff"+[head.map(q).join(";")].concat(lines).join("\r\n")],{type:"text/csv;charset=utf-8"});

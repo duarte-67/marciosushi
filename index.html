@@ -421,8 +421,8 @@ const DRAFT_DAYS = 7;          // o pedido começado fica guardado por 7 dias
 let memReady = false;          // só grava depois de restaurar, para não apagar o que já estava salvo
 const draft0 = memLoad("ms-rascunho");
 const draftOk = !!(draft0 && !draft0.sent && draft0.t && Date.now()-draft0.t < DRAFT_DAYS*864e5);
-let cart = draftOk ? (draft0.cart||{}) : {};
-Object.keys(cart).forEach(k=>{ if(!ITEMS[k]) delete cart[k]; });
+let cart = draftOk && draft0.cart && typeof draft0.cart==="object" && !Array.isArray(draft0.cart) ? draft0.cart : {};
+Object.keys(cart).forEach(k=>{ const q=Math.floor(+cart[k]); if(!ITEMS[k]||!(q>0)) delete cart[k]; else cart[k]=Math.min(q,99); });
 
 /* rolagem própria (não depende do "smooth" nativo, que falha em cliques seguidos) */
 let lock = 0;
@@ -689,7 +689,7 @@ function saveMem(){
   const pr=memLoad("ms-perfil")||{};
   if(pr.nome) $("#nome").value=pr.nome;
   if(pr.end) $("#end").value=pr.end;
-  [["modo",pr.modo],["pag",pr.pag],["cid",pr.cid]].forEach(([n,v])=>{ if(!v) return; const r=document.querySelector(`[name=${n}][value="${v}"]`); if(r) r.checked=true; });
+  [["modo",pr.modo],["pag",pr.pag],["cid",pr.cid]].forEach(([n,v])=>{ if(!v) return; let r=null; try{ r=document.querySelector(`[name=${n}][value="${CSS.escape(String(v))}"]`) }catch(e){} if(r) r.checked=true; });
   if(draftOk && draft0.obs) $("#obs").value=draft0.obs;
   memReady=true; refresh();
 })();
@@ -705,7 +705,8 @@ $("#forget").addEventListener("click",()=>{
 /* ---------- peça de novo: últimos pedidos do cliente (cookie ms-historico) ---------- */
 const HIST_MAX = 5, HIST_SHOW = 3;
 let histAll = false;
-function histLoad(){ const h=memLoad("ms-historico"); return Array.isArray(h)?h:[]; }
+function histLoad(){ let s=null; try{ s=localStorage.getItem("ms-historico") }catch(e){} if(!s) s=cookieGet("ms-historico"); try{ const h=s?JSON.parse(s):[]; return Array.isArray(h)?h:[] }catch(e){ return [] } }
+function histSave(h){ const s=JSON.stringify(h); try{ localStorage.setItem("ms-historico",s); cookieSet("ms-historico","",0) }catch(e){ cookieSet("ms-historico",s,365) } }
 function histAdd(){
   const rows = Object.keys(cart).filter(k=>cart[k]>0 && ITEMS[k]).map(k=>[k.split("-")[0], ITEMS[k].nome, cart[k]]);
   if(!rows.length) return;
@@ -715,7 +716,7 @@ function histAdd(){
   h.unshift({t:Date.now(), i:rows});
   h = h.slice(0,HIST_MAX);
   while(h.length>1 && encodeURIComponent(JSON.stringify(h)).length>3200) h.pop();   // cookie tem limite de ~4 KB
-  memSave("ms-historico",h,365);
+  histSave(h);
   renderAgain();
 }
 function histResolve(o){
