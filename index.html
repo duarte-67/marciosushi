@@ -160,6 +160,9 @@ textarea{resize:none;min-height:68px}
 .send svg{width:22px;height:22px;fill:currentColor}
 .ghost{padding:10px;font-size:14px;font-weight:600;color:var(--muted)}
 .note{font-size:12px;color:var(--muted);text-align:center}
+.wshort{margin:0;text-align:center;font-size:12.5px;line-height:1.35;color:var(--coal)}
+.wnote{margin-top:16px;background:rgba(240,90,30,.08);border:1px solid rgba(240,90,30,.28);border-radius:12px;padding:10px 12px;text-align:left;font-size:12.5px;line-height:1.4;color:var(--coal)}
+.wnote b{display:block;font-size:13.5px;color:var(--burnt);margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -257,6 +260,7 @@ textarea{resize:none;min-height:68px}
         <div id="sDelRow"><span>Taxa de entrega</span><span id="sDel"></span></div>
         <div class="tot"><span id="sTotL">Total</span><span id="sTot"></span></div>
       </div>
+      <div class="wnote"><b>Quase lá! Seu pedido segue pelo WhatsApp 💬</b>Ao tocar no botão abaixo, você será levado ao nosso WhatsApp com a mensagem do seu pedido já pronta. É só conferir e enviar: assim recebemos tudo certinho e preparamos o seu sushi com o cuidado de sempre.</div>
       <p class="note" id="memNote" style="margin-top:16px">Guardamos seu nome, endereço e pedido neste aparelho (cookie) para você não digitar de novo. <button type="button" class="linkbtn" id="forget">Esquecer meus dados</button></p>
     </div>
   </div>
@@ -264,13 +268,14 @@ textarea{resize:none;min-height:68px}
   <button type="button" class="more" id="more">Role para ver mais ↓</button>
   </div>
   <div class="sh-foot">
+    <p class="wshort">💬 Você será levado ao nosso WhatsApp com a mensagem do pedido <b>já pronta</b>. É só conferir e enviar.</p>
     <a class="send off" id="send" href="#" target="_blank" rel="noopener">
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3C9 3 3.4 8.6 3.4 15.5c0 2.3.6 4.4 1.7 6.3L3 29l7.4-2c1.800 1 3.800 1.500 5.600 1.500 6.900 0 12.600-5.600 12.600-12.500S22.900 3 16 3zm6.500 17.600c-.3.800-1.600 1.500-2.200 1.600-.6.100-1.300.1-2.100-.1-.5-.2-1.200-.4-2-.8-3.500-1.500-5.800-5.100-6-5.300-.2-.2-1.400-1.900-1.400-3.600s.9-2.600 1.200-2.900c.3-.3.700-.4.900-.4h.7c.2 0 .5-.1.800.6l1 2.400c.1.200.1.400 0 .6l-.4.600-.5.600c-.2.200-.4.400-.2.800.2.400 1 1.600 2.100 2.600 1.400 1.200 2.600 1.600 3 1.800.4.200.6.100.8-.1.200-.3.900-1 1.100-1.400.2-.4.500-.3.800-.2l2.300 1.100c.4.200.6.300.7.500.1.200.1 1-.2 1.800z"/></svg>
       <span>Enviar pedido no WhatsApp</span>
     </a>
     <div class="hint" id="hint" style="text-align:center;margin:0"></div>
     <button class="ghost" id="copy">Copiar pedido</button>
-    <p class="note">Você confere tudo no WhatsApp antes de enviar.</p>
+    <p class="note">Obrigado por escolher o Márcio Sushi 🍣</p>
   </div>
 </section>
 
