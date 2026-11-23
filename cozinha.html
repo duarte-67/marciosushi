@@ -176,6 +176,20 @@ textarea:focus,input:focus{outline:none;border-color:var(--orange)}
 .mbox #mType{width:100%;padding:12px 14px;font-size:16px;margin:0 0 14px;background:var(--ink);color:var(--pearl);border:1px solid var(--late);border-radius:12px;font-family:inherit;text-transform:uppercase}
 .mbox .mbtn{display:flex;gap:10px}.mbox .mbtn .btn{flex:1;padding:14px}
 .mbox .mbtn .btn:disabled{opacity:.4;pointer-events:none}
+.ana h5{margin:18px 0 6px;font-size:14px;color:#ff9a66;letter-spacing:.04em;text-transform:uppercase}
+.ana .ins{margin:10px 0 4px;padding:0;list-style:none;display:grid;gap:8px}
+.ana .ins li{background:var(--ink);border:1px solid var(--line);border-left:4px solid var(--orange);border-radius:10px;padding:10px 12px;font-size:15px;line-height:1.4}
+.ana .ins li small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.ana .fn{display:grid;gap:6px}
+.ana .ab{display:grid;grid-template-columns:minmax(90px,1.2fr) 2fr auto;gap:10px;align-items:center;font-size:14px}
+.ana .ab .bt{background:var(--ink);border-radius:99px;height:12px;overflow:hidden}
+.ana .ab .bt i{display:block;height:100%;background:var(--orange);border-radius:99px}
+.ana .ab .bt i.g{background:var(--ok)}
+.ana .ab em{font-style:normal;color:var(--muted);font-size:13px;white-space:nowrap}
+.ana .tb{display:grid;gap:6px}
+.ana .tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px}
+.ana .tr b{font-weight:700}.ana .tr span{color:var(--muted);font-size:12.5px}.ana .tr em{font-style:normal;font-weight:700;text-align:right}
+.ana .tr.bad em{color:#ff8b8e}.ana .tr.good em{color:#6fe0a0}
 .hdel{margin-top:10px;font-size:13px;padding:9px 14px;color:#ff8b8e;border-color:#6a2b2d}
 .hbar .hall{color:#ff8b8e;border-color:#6a2b2d}
 .prep{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-left:auto}
@@ -556,6 +570,18 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
   <section class="sec" id="doneSec">
     <h3><span id="doneTitle">Prontos</span><button class="btn ghost" id="clean">Limpar prontos</button></h3>
     <div class="grid" id="done"></div>
+  </section>
+
+  <section class="sec hide" id="anaSec">
+    <details class="cfg hist ana" id="anaDet"><summary>📊 Comportamento dos clientes <small>como usam a página de pedidos</small></summary>
+      <div class="histbody">
+        <div class="hbar">
+          <div class="pvt" id="anaRange"><button data-r="1">Hoje</button><button data-r="7">7 dias</button><button data-r="30">30 dias</button><button data-r="all">Tudo</button></div>
+          <button class="btn ghost" id="anaReload">Atualizar</button>
+        </div>
+        <div id="anaOut"></div>
+      </div>
+    </details>
   </section>
 
   <section class="sec hide" id="histSec">
@@ -1143,6 +1169,7 @@ function render(){
   $("#queue").innerHTML=act.length?act.map(o=>ticket(o,rec)).join(""):`<div class="empty" style="grid-column:1/-1">${rec?"Nenhum pedido na fila. Confirme um pedido e cole a mensagem acima.":"Sem pedidos na fila. 🍣"}</div>`;
   $("#doneSec").classList.toggle("hide",!dn.length||kan||pain||sv);
   $("#histSec").classList.toggle("hide",kan||pain||sv);
+  $("#anaSec").classList.toggle("hide",kan||pain||sv);
   $("#doneTitle").textContent=`Prontos (${dn.length})`;
   $("#done").innerHTML=dn.map(o=>ticket(o,rec)).join("");
   if(!shared&&!srv) setSync(false);
@@ -1536,6 +1563,85 @@ function histRender(){
     return `<div class="hday"><h4>${esc(dayLbl(os[0].createdAt||0))}<span>${os.length} ${os.length===1?"pedido":"pedidos"} · ${brl(dt)}</span></h4>`+os.map(o=>`<details class="hrow"><summary><span class="ht">${hhmm(o.createdAt||0)}</span><b>#${o.n||"?"} ${esc(o.cliente||"Sem nome")}</b><span class="hm">${esc(o.modo||"")}</span><span class="hv">${o.total?"R$ "+esc(o.total):"—"}</span><span class="hs ${o.status==="pronto"?"ok":""}">${o.status==="pronto"?"pronto":"em andamento"}</span></summary><div class="hd">${histItems(o)}<p class="hx">${o.endereco?"📍 "+esc(o.endereco)+" · ":""}${o.pagamento?"💳 "+esc(o.pagamento)+" · ":""}${o.horario?"🕒 "+esc(o.horario):""}${o.obs?"<br>📝 "+esc(o.obs):""}${o.mapa?`<br><a href="${esc(o.mapa)}" target="_blank" rel="noopener">Ver no mapa</a>`:""}</p>${H.local?"":`<button class="btn ghost hdel" data-hdel="${o.id}">🗑 Excluir do histórico</button>`}</div></details>`).join("")+"</div>";
   }).join("");
 }
+/* ---------- comportamento dos clientes (medido na página de pedidos) ---------- */
+const A={range:"7",rows:[],loading:false,err:"",local:false};
+async function anaLoad(){
+  A.loading=true; A.err=""; anaRender();
+  try{
+    if(!shared||!dbRef){ A.local=true; A.rows=[] }
+    else{
+      A.local=false; const since=A.range==="all"?0:A.range==="1"?(()=>{const d=new Date();d.setHours(0,0,0,0);return +d})():Date.now()-(+A.range)*86400000; let rows;
+      try{
+        let q=dbRef.collection("analytics"); if(since) q=q.where("t0",">=",since);
+        const snap=await q.orderBy("t0","desc").limit(3000).get(); rows=snap.docs.map(d=>d.data());
+      }catch(e1){
+        if(e1&&e1.code==="permission-denied") throw e1;
+        const snap=await dbRef.collection("analytics").get(); rows=snap.docs.map(d=>d.data()).filter(o=>(o.t0||0)>=since);
+      }
+      A.rows=rows;
+    }
+  }catch(e){ console.warn(e); A.err=e&&e.code==="permission-denied"?"Sem permissão para ler as estatísticas. Libere a coleção 'analytics' nas regras do Firebase.":"Não foi possível carregar as estatísticas." }
+  A.loading=false; anaRender();
+}
+const fmtS=n=>{n=Math.round(n); return n<60?n+"s":Math.floor(n/60)+"min"+(n%60?" "+String(n%60).padStart(2,"0")+"s":"")};
+const pc=(a,b)=>b?Math.round(a/b*100):0;
+const sumObj=o=>Object.values(o||{}).reduce((a,v)=>a+(+v||0),0);
+const itName=k=>k.replace("|"," · ");
+function anaCalc(){
+  const R=A.rows.filter(r=>(r.dur||0)>=3||r.sent), n=R.length, o={n};
+  if(!n) return o;
+  o.uniq=new Set(R.map(r=>r.vid)).size; o.ret=R.filter(r=>r.ret).length;
+  o.avg=R.reduce((a,r)=>a+(r.dur||0),0)/n; o.bounce=R.filter(r=>(r.dur||0)<10&&!sumObj(r.ia)).length;
+  o.added=R.filter(r=>sumObj(r.ia)>0||(r.maxCart||0)>0).length; o.cart=R.filter(r=>r.cartOpen).length; o.sent=R.filter(r=>r.sent).length;
+  o.mob=R.filter(r=>r.dev==="m").length;
+  o.src={}; R.forEach(r=>{const k=r.src||"direto"; o.src[k]=(o.src[k]||0)+1});
+  o.hours=Array(24).fill(0); R.forEach(r=>{o.hours[new Date(r.t0).getHours()]++});
+  const sec={}; R.forEach(r=>Object.entries(r.sec||{}).forEach(([k,v])=>{const x=sec[k]=sec[k]||{k,t:0,r:0}; x.t+=v; x.r++}));
+  o.sec=Object.values(sec).sort((a,b)=>b.t-a.t);
+  const it={}; R.forEach(r=>{
+    Object.entries(r.iv||{}).forEach(([k,v])=>{const x=it[k]=it[k]||{k,t:0,look:0,add:0}; x.t+=v; if(v>=2) x.look++});
+    Object.entries(r.ia||{}).forEach(([k,v])=>{const x=it[k]=it[k]||{k,t:0,look:0,add:0}; if(v>0) x.add++});
+  });
+  o.items=Object.values(it); o.cartAdds=o.items.reduce((a,x)=>a+x.add,0);
+  return o;
+}
+function anaRender(){
+  const out=$("#anaOut"); if(!out) return;
+  document.querySelectorAll("#anaRange [data-r]").forEach(b=>b.classList.toggle("on",b.dataset.r===A.range));
+  if(A.loading){ out.innerHTML='<p class="hmsg">Carregando…</p>'; return }
+  if(A.err){ out.innerHTML=`<p class="hmsg err">${esc(A.err)}</p>`; return }
+  if(A.local){ out.innerHTML='<p class="hmsg">Sem conexão com o banco: as estatísticas só aparecem com o banco ligado.</p>'; return }
+  const d=anaCalc(), n=d.n;
+  if(!n){ out.innerHTML='<p class="hmsg">Ainda não há visitas medidas neste período. Elas começam a aparecer assim que clientes abrirem a página de pedidos.</p>'; return }
+  const ins=[];
+  const stages=[["entram na página",n],["adicionam algo ao carrinho",d.added],["abrem o pedido",d.cart],["enviam pelo WhatsApp",d.sent]];
+  let worst=null; for(let i=1;i<stages.length;i++){ const lost=stages[i-1][1]-stages[i][1]; if(stages[i-1][1]>0&&(!worst||lost/stages[i-1][1]>worst.p)) worst={p:lost/stages[i-1][1],a:stages[i-1][0],b:stages[i][0],lost} }
+  ins.push(`<b>${pc(d.sent,n)}%</b> das visitas terminam enviando o pedido e <b>${pc(d.added,n)}%</b> adicionam algo ao carrinho.${worst&&worst.lost>0?`<small>A maior perda está entre “${worst.a}” e “${worst.b}”: ${Math.round(worst.p*100)}% param aí.</small>`:""}`);
+  if(d.bounce/n>=.3) ins.push(`<b>${pc(d.bounce,n)}%</b> saem em menos de 10 segundos sem adicionar nada.<small>Vale conferir se a primeira tela (topo e primeiros itens) está convidando a continuar.</small>`);
+  if(d.sec.length){ const top=d.sec[0]; ins.push(`A seção em que mais ficam é <b>${esc(top.k)}</b>: média de ${fmtS(top.t/n)} por visita.`);
+    const low=d.sec.filter(x=>x.k!==top.k).sort((a,b)=>a.r-b.r)[0]; if(low&&pc(low.r,n)<=60) ins.push(`Só <b>${pc(low.r,n)}%</b> das visitas chegam a <b>${esc(low.k)}</b>.<small>Quem não rola até lá nunca vê esses itens.</small>`); }
+  const ign=d.items.filter(x=>x.look>=3&&x.add/x.look<.25).sort((a,b)=>b.look*(1-b.add/b.look)-a.look*(1-a.add/a.look))[0];
+  if(ign) ins.push(`<b>${esc(itName(ign.k))}</b> é muito visto (${ign.look} visitas) mas ${ign.add?`só ${ign.add} adicionaram`:"ninguém adicionou"}.<small>Pode ser preço, descrição ou foto: vale testar.</small>`);
+  const best=d.items.filter(x=>x.look>=3&&x.add>0).sort((a,b)=>b.add/b.look-a.add/a.look||b.add-a.add)[0];
+  if(best) ins.push(`<b>${esc(itName(best.k))}</b> converte bem: ${best.add} de ${best.look} que olharam adicionaram (${pc(best.add,best.look)}%).`);
+  const pk=d.hours.indexOf(Math.max(...d.hours)); ins.push(`${pc(d.mob,n)}% acessam pelo celular. O maior movimento é por volta das <b>${pk}h</b>.`);
+  if(n<30) ins.push(`<small style="margin:0">Poucos dados ainda (${n} visitas). As tendências ficam mais confiáveis a partir de umas 30 visitas.</small>`);
+  const srcs=Object.entries(d.src).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`${esc(k)} ${pc(v,n)}%`).join(" · ");
+  const maxS=d.sec[0]?d.sec[0].t:1, bar=(l,v,m,e,g)=>`<div class="ab"><span>${l}</span><div class="bt"><i class="${g?"g":""}" style="width:${Math.max(2,Math.round(v/m*100))}%"></i></div><em>${e}</em></div>`;
+  const row=(x,cls)=>`<div class="tr ${cls||""}"><b>${esc(itName(x.k))}</b><em>${cls==="bad"?`${x.add} de ${x.look}`:cls==="good"?`${x.add} pedidos`:fmtS(x.t/n)+" / visita"}</em><span>visto por ${x.look} ${x.look===1?"visita":"visitas"} · tempo total ${fmtS(x.t)}</span><span style="text-align:right">${x.look?pc(x.add,x.look)+"% adicionam":"—"}</span></div>`;
+  const most=d.items.slice().sort((a,b)=>b.t-a.t).slice(0,8);
+  const added=d.items.filter(x=>x.add>0).sort((a,b)=>b.add-a.add).slice(0,8);
+  const ignored=d.items.filter(x=>x.look>=3&&x.add/x.look<.25).sort((a,b)=>b.look*(1-b.add/b.look)-a.look*(1-a.add/a.look)).slice(0,8);
+  out.innerHTML=`<div class="hsum"><div><b>${n}</b><span>visitas</span></div><div><b>${d.uniq}</b><span>pessoas (aparelhos)</span></div><div><b>${fmtS(d.avg)}</b><span>tempo médio na página</span></div><div><b>${pc(d.sent,n)}%</b><span>enviam o pedido</span></div></div>
+  <h5>O que os dados dizem</h5><ul class="ins">${ins.map(x=>`<li>${x}</li>`).join("")}</ul>
+  <h5>Do acesso ao pedido</h5><div class="fn">${stages.map((s,i)=>bar("Visitas que "+s[0],s[1],n,`${s[1]} · ${pc(s[1],n)}%`,i===3)).join("")}</div>
+  <h5>Tempo em cada seção (média por visita)</h5><div class="fn">${d.sec.map(x=>bar(esc(x.k),x.t,maxS,`${fmtS(x.t/n)} · ${pc(x.r,n)}% chegam`)).join("")}</div>
+  <h5>Itens mais olhados</h5><div class="tb">${most.map(x=>row(x)).join("")||'<p class="hmsg">Sem dados ainda.</p>'}</div>
+  <h5>Itens mais adicionados</h5><div class="tb">${added.map(x=>row(x,"good")).join("")||'<p class="hmsg">Ninguém adicionou itens neste período.</p>'}</div>
+  <h5>Olham, mas ignoram</h5><div class="tb">${ignored.map(x=>row(x,"bad")).join("")||'<p class="hmsg">Nenhum item com muita visualização e pouca adição (ou ainda poucos dados).</p>'}</div>
+  <h5>De onde vêm</h5><p class="hmsg" style="margin-top:0">${srcs} · ${d.ret} ${d.ret===1?"visita":"visitas"} de quem já tinha voltado antes (${pc(d.ret,n)}%)</p>
+  <p class="hmsg">Medido de forma anônima, sem nome, telefone ou endereço. “Olhou” = o item ficou pelo menos 2 segundos no meio da tela do cliente.</p>`;
+}
 function histCsv(){
   const rows=histFiltered(); if(!rows.length){ toast("Nada para baixar neste período"); return }
   const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
@@ -1550,6 +1656,11 @@ function histCsv(){
   $("#histRange").addEventListener("click",e=>{const b=e.target.closest("[data-r]"); if(!b) return; H.range=b.dataset.r; histLoad()});
   $("#histQ").addEventListener("input",e=>{H.q=e.target.value; histRender()});
   $("#histCsv").addEventListener("click",histCsv);
+  const ad=$("#anaDet"); if(ad){
+    ad.addEventListener("toggle",()=>{ if(ad.open) anaLoad() });
+    $("#anaRange").addEventListener("click",e=>{const b=e.target.closest("[data-r]"); if(!b) return; A.range=b.dataset.r; anaLoad()});
+    $("#anaReload").addEventListener("click",anaLoad);
+  }
   $("#histList").addEventListener("click",async e=>{
     const b=e.target.closest("[data-hdel]"); if(!b) return; e.preventDefault();
     const o=H.rows.find(x=>x.id===b.dataset.hdel); if(!o) return;

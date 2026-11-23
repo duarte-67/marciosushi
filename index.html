@@ -194,6 +194,7 @@ textarea{resize:none;min-height:68px}
   </div>
   <p>Pedidos pelo WhatsApp <strong>(67) 99930-1185</strong></p>
   <p style="margin-top:4px">@marciosushi.oficial</p>
+  <p style="margin-top:10px;font-size:11px;opacity:.65;line-height:1.4">Medimos de forma anônima como o cardápio é usado (sem nome, telefone ou endereço) para melhorar a sua experiência.</p>
 </footer>
 
 <div class="bar" id="bar"><button id="openCart" aria-label="Ver pedido">
@@ -714,6 +715,62 @@ function storeStatus(){
   el.textContent = aberto ? "Pedidos abertos · até 23:59" : "Fechado agora · abrimos às "+String(OPEN_FROM).padStart(2,"0")+":00";
 }
 storeStatus(); setInterval(storeStatus, 30000);
+
+/* ---------- estatísticas anônimas de uso (sem nome, telefone ou endereço) ---------- */
+(()=>{
+  try{
+    const q=new URLSearchParams(location.search);
+    if(q.get("nt")==="1") localStorage.setItem("ms-notrack","1");
+    if(q.get("nt")==="0") localStorage.removeItem("ms-notrack");
+    if(localStorage.getItem("ms-notrack")==="1") return;      // ?nt=1 desliga a medição neste aparelho (para os seus testes)
+  }catch(e){}
+  if(navigator.webdriver && !window.__track) return;          // robôs não contam
+  const URL_FS="https://firestore.googleapis.com/v1/projects/marciosushi/databases/(default)/documents/analytics/";
+  const KEY="AIzaSyB0sir3zcUGjnuVbs-3zHmYHP3KVgRo4k0";
+  const rnd=()=>Math.random().toString(36).slice(2,10);
+  let vid=cookieGet("ms-vid"); const ret=!!vid; if(!vid) vid=rnd()+rnd(); cookieSet("ms-vid",vid,365);
+  const sid=Date.now().toString(36)+rnd();
+  const srcOf=()=>{
+    let u=""; try{ u=(new URLSearchParams(location.search).get("utm_source")||"").toLowerCase() }catch(e){}
+    if(!u){ try{ u=document.referrer?new URL(document.referrer).hostname.replace(/^www\./,"").toLowerCase():"" }catch(e){} }
+    if(!u) return "direto";
+    if(/insta/.test(u)) return "instagram"; if(/whats|wa\.me/.test(u)) return "whatsapp"; if(/face|fb\./.test(u)) return "facebook"; if(/google/.test(u)) return "google";
+    return u.slice(0,30);
+  };
+  const S={t0:Date.now(),t1:Date.now(),vid,ret,dev:innerWidth<700?"m":"d",src:srcOf(),dur:0,sec:{},iv:{},ia:{},cartOpen:false,sent:false,maxCart:0,scroll:0};
+  const clean=k=>String(k).replace(/[.\/\[\]*`~]/g," ").slice(0,80);
+  const vis=new Set(), visI=new Set(); let lastAct=Date.now(), ms={sec:{},iv:{}}, adds={};
+  /* o que está na faixa central da tela é o que o cliente está lendo */
+  const io=new IntersectionObserver(es=>es.forEach(e=>{ const k=e.target.dataset.tk; (e.target.matches(".sec")?vis:visI)[e.isIntersecting?"add":"delete"](k) }),{rootMargin:"-38% 0px -38% 0px"});
+  document.querySelectorAll("#menu .sec").forEach(el=>{ const m=MENU.find(x=>x.id===el.id); if(m){ el.dataset.tk=clean(m.nome); io.observe(el) } });
+  Object.keys(ITEMS).forEach(id=>{ const el=document.getElementById("r-"+id); if(el){ el.dataset.tk=clean(ITEMS[id].sec+"|"+ITEMS[id].nome); io.observe(el) } });
+  ["scroll","touchstart","click","keydown","mousemove"].forEach(ev=>addEventListener(ev,()=>{lastAct=Date.now()},{passive:true,capture:true}));
+  setInterval(()=>{
+    if(document.hidden||Date.now()-lastAct>45000) return;   // aba escondida ou parado: não conta
+    S.dur+=1; vis.forEach(k=>ms.sec[k]=(ms.sec[k]||0)+1); visI.forEach(k=>ms.iv[k]=(ms.iv[k]||0)+1);
+  },1000);
+  document.addEventListener("click",e=>{
+    const b=e.target.closest&&e.target.closest("[data-a]"); if(b&&b.dataset.a==="inc"&&ITEMS[b.dataset.id]){ const it=ITEMS[b.dataset.id], k=clean(it.sec+"|"+it.nome); adds[k]=(adds[k]||0)+1 }
+    if(e.target.closest&&e.target.closest("#openCart")) S.cartOpen=true;
+  },true);
+  const sendBtn=document.getElementById("send");
+  if(sendBtn) sendBtn.addEventListener("click",()=>{ if(sendBtn.href.indexOf("wa.me")>-1){ S.sent=true; flush() } });
+  const fv=v=>typeof v==="number"?{integerValue:String(Math.round(v))}:typeof v==="boolean"?{booleanValue:v}:typeof v==="string"?{stringValue:v}:{mapValue:{fields:Object.fromEntries(Object.entries(v).map(([k,x])=>[k,fv(x)]))}};
+  let last="";
+  function flush(){
+    if(S.dur<3&&!S.sent) return;
+    S.t1=Date.now(); S.maxCart=Math.max(S.maxCart,Object.values(cart).reduce((a,n)=>a+n,0));
+    S.scroll=Math.min(100,Math.round((scrollY+innerHeight)/Math.max(1,document.documentElement.scrollHeight)*100));
+    const keep=o=>Object.fromEntries(Object.entries(o).filter(([k,v])=>v>=1).slice(0,80));
+    const doc={...S,sec:keep(ms.sec),iv:keep(ms.iv),ia:adds};
+    const body=JSON.stringify({fields:Object.fromEntries(Object.entries(doc).map(([k,v])=>[k,fv(v)]))});
+    if(body===last) return; last=body;
+    try{ fetch(URL_FS+sid+"?key="+KEY,{method:"PATCH",headers:{"Content-Type":"application/json"},body,keepalive:true}).catch(()=>{}) }catch(e){}
+  }
+  setInterval(flush,20000);
+  document.addEventListener("visibilitychange",()=>{ if(document.hidden) flush() });
+  addEventListener("pagehide",flush);
+})();
 </script>
 </body>
 </html>
