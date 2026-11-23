@@ -983,7 +983,7 @@ function tierOf(it){
   if(/hot temaki/.test(n)) return 2;
   if(c==="Hossomakis"||c==="Niguiri"||c==="Sashimi"||/ni(gu|g)iri/.test(n)) return 0;
   if(c==="Uramakis"&&n==="filadelfia") return 0;
-  if(c==="Joy"&&/^(salmao )?tradicional$/.test(n)) return 0;
+  if(c==="Joy"&&/^(salmao( tradicional)?|tradicional)$/.test(n)) return 0;
   return 1;
 }
 function displayGroups(o){
