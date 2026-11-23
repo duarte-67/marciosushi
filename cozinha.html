@@ -214,6 +214,27 @@ details.prod summary span{font-weight:500;color:var(--muted);font-size:13px}
 .lote .ln small{color:var(--muted)}
 .lote>.btn{margin-top:8px;width:100%;padding:11px}
 .lote .prow:first-of-type{border-top:0}
+.hist summary small{font-weight:500;color:var(--muted);margin-left:8px;font-size:12px}
+.histbody{padding:0 16px 16px}
+.hbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.hbar .pvt{margin:0}.hbar input{flex:1 1 220px;padding:10px 14px;font-size:15px;background:var(--ink);color:var(--pearl);border:1px solid var(--line);border-radius:12px;font-family:inherit}
+.hbar input::placeholder{color:var(--muted)}
+.hsum{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px}
+.hsum>div{flex:1 1 130px;background:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.hsum b{display:block;font-family:var(--serif);font-size:22px}.hsum span{font-size:12px;color:var(--muted)}
+.hmsg{width:100%;color:var(--muted);font-size:14px;margin:10px 0}.hmsg.err{color:#ff8a7a}
+.hday h4{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:14px;text-transform:capitalize;margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.hday h4 span{color:var(--muted);font-weight:600;text-transform:none}
+.hrow{background:var(--ink);border:1px solid var(--line);border-radius:12px;margin-top:6px}
+.hrow summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;padding:10px 14px;font-size:15px}
+.hrow summary::-webkit-details-marker{display:none}
+.hrow .ht{color:var(--muted);font-variant-numeric:tabular-nums}.hrow .hm{color:var(--muted);font-size:13px}
+.hrow .hv{margin-left:auto;font-weight:700}
+.hrow .hs{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;background:rgba(240,90,30,.18);color:#ffb08a}
+.hrow .hs.ok{background:rgba(64,176,110,.18);color:#6fe0a0}
+.hd{padding:0 14px 12px;font-size:14px}
+.hd .hc{margin:6px 0}.hd .hc b{display:block;color:#ff9a66}.hd .hc span{color:var(--muted);font-size:13px}
+.hd .hl{margin:3px 0}.hd .hx{color:var(--muted);font-size:13px;margin:8px 0 0}.hd a{color:#ff9a66}
 .cfg{margin-top:14px;background:var(--ink2);border:1px solid var(--line);border-radius:16px}
 .cfg summary{list-style:none;cursor:pointer;padding:12px 16px;font-weight:700;font-size:14px;color:var(--muted)}
 .cfg summary::-webkit-details-marker{display:none}
@@ -504,6 +525,20 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
     <h3><span id="doneTitle">Prontos</span><button class="btn ghost" id="clean">Limpar prontos</button></h3>
     <div class="grid" id="done"></div>
   </section>
+
+  <section class="sec hide" id="histSec">
+    <details class="cfg hist" id="histDet"><summary>📚 Histórico de pedidos <small>guardado para sempre</small></summary>
+      <div class="histbody">
+        <div class="hbar">
+          <div class="pvt" id="histRange"><button data-r="1">Hoje</button><button data-r="7">7 dias</button><button data-r="30">30 dias</button><button data-r="all">Tudo</button></div>
+          <input id="histQ" type="search" placeholder="Buscar cliente, endereço ou nº do pedido">
+          <button class="btn ghost" id="histCsv">Baixar planilha (CSV)</button>
+        </div>
+        <div class="hsum" id="histSum"></div>
+        <div id="histList"></div>
+      </div>
+    </details>
+  </section>
 </main>
 <div class="keys hide" id="keys"><span><kbd>Espaço</kbd>marca o item · depois conclui e vai ao próximo</span><span><kbd>Enter</kbd>conclui o pedido inteiro</span><span><kbd>⌫</kbd>desfaz</span></div>
 <div class="lock hide" id="lock"><form id="lockF"><h3>🔒 Cozinha · Márcio Sushi</h3><p id="lockMsg">Digite a senha para abrir os pedidos.</p><input id="lockEm" type="email" autocomplete="username" placeholder="E-mail" style="display:none"><input id="lockPw" type="password" autocomplete="current-password" placeholder="Senha"><div class="err" id="lockErr"></div><button>Entrar</button></form></div>
@@ -578,14 +613,18 @@ const Local={
 };
 orders=Local.load();
 const queue={};
-let fbMode=false;
+let fbMode=false, histBackfill=false;
 function enqueue(id,fn){ if(fbMode){ try{ Promise.resolve(fn()).catch(onErr) }catch(e){ onErr(e) } return } queue[id]=(queue[id]||Promise.resolve()).then(fn).catch(onErr) }
 function onErr(e){
   const c=e&&e.code;
   toast(c==="invalid_argument"?"Sem permissão para alterar. Peça acesso de Contribuidor.":c==="permission-denied"?"Sem permissão. Entre de novo com o e-mail da cozinha ou confira as regras do banco.":"Não foi possível salvar. Tente de novo.");
   console.warn(e);
 }
-function persistSet(o){ if(srv) return srvOp("set",{id:o.id,order:o}); if(shared) return enqueue(o.id,()=>dbRef.collection("orders").doc(o.id).set(o)); Local.save(); }
+/* histórico permanente: cada pedido é copiado para "historico", que nunca é apagado (nem por "Limpar prontos") */
+let histWarned=false;
+function histErr(e){ console.warn("historico",e); if(!histWarned){ histWarned=true; toast("Histórico: falta liberar a coleção 'historico' nas regras do Firebase.") } }
+function archive(o){ if(!o||!shared||!dbRef) return; try{ Promise.resolve(dbRef.collection("historico").doc(o.id).set(JSON.parse(JSON.stringify(o)))).catch(histErr) }catch(e){ histErr(e) } }
+function persistSet(o){ if(srv) return srvOp("set",{id:o.id,order:o}); if(shared){ archive(o); return enqueue(o.id,()=>dbRef.collection("orders").doc(o.id).set(o)) } Local.save(); }
 function persistUpdate(id,patch){ if(srv) return srvOp("patch",{id,patch}); if(shared) return enqueue(id,()=>dbRef.collection("orders").doc(id).update(patch)); Local.save(); }
 function persistDelete(id){ if(srv) return srvOp("del",{id}); if(shared) return enqueue(id,()=>dbRef.collection("orders").doc(id).delete()); Local.save(); }
 
@@ -593,6 +632,7 @@ function attachDb(db){
   dbRef=db; shared=true;
   return db.collection("orders").onSnapshot(snap=>{
     orders=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(!histBackfill){ histBackfill=true; orders.forEach(archive) }
     if(seen===null||!shared_first){seen=new Set(orders.map(o=>o.id));shared_first=true}
     setSync(true); render();
   },e=>{setSync(false);onErr(e)});
@@ -616,7 +656,7 @@ const FIREBASE_CFG={
   appId:"1:1007452357990:web:13e3217bf6bfa1affe74a7"
 };
 let fbAuth=null, fbUnsubs=[];
-function fbStop(){ fbUnsubs.forEach(u=>{try{u()}catch(e){}}); fbUnsubs=[]; shared=false; fbMode=false; orders=[]; seen=null; shared_first=false; render() }
+function fbStop(){ fbUnsubs.forEach(u=>{try{u()}catch(e){}}); fbUnsubs=[]; shared=false; fbMode=false; histBackfill=false; orders=[]; seen=null; shared_first=false; render() }
 function fbStart(){
   fbStop(); fbMode=true; $("#lock").classList.add("hide");
   fbUnsubs.push(attachDb(dbRef));
@@ -805,7 +845,7 @@ function keyPrep(e){
 }
 function patch(id,fn){
   const o=orders.find(x=>x.id===id); if(!o) return;
-  const p=fn(o); orders=orders.map(x=>x.id===id?{...x,...p}:x); persistUpdate(id,p); render();
+  const p=fn(o); orders=orders.map(x=>x.id===id?{...x,...p}:x); persistUpdate(id,p); archive(orders.find(x=>x.id===id)); render();
 }
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-act]"); if(!b) return;
@@ -1058,6 +1098,7 @@ function render(){
   if(kan) $("#kan").innerHTML=kanban(act,dn);
   $("#queue").innerHTML=act.length?act.map(o=>ticket(o,rec)).join(""):`<div class="empty" style="grid-column:1/-1">${rec?"Nenhum pedido na fila. Confirme um pedido e cole a mensagem acima.":"Sem pedidos na fila. 🍣"}</div>`;
   $("#doneSec").classList.toggle("hide",!dn.length||kan||pain||sv);
+  $("#histSec").classList.toggle("hide",kan||pain||sv);
   $("#doneTitle").textContent=`Prontos (${dn.length})`;
   $("#done").innerHTML=dn.map(o=>ticket(o,rec)).join("");
   if(!shared&&!srv) setSync(false);
@@ -1387,6 +1428,64 @@ function viewPanel(act,dn){
 }
 setInterval(()=>{ if(mode==="painel"&&!document.hidden) tickCd() },1000);
 
+/* ---------- histórico: consulta, busca e planilha ---------- */
+const H={range:"7",q:"",rows:[],loading:false,err:"",local:false};
+const numBR=t=>{const v=parseFloat(String(t||"").replace(/\./g,"").replace(",","."));return isNaN(v)?0:v};
+function histSince(){ if(H.range==="all") return 0; if(H.range==="1"){const d=new Date(); d.setHours(0,0,0,0); return +d} return Date.now()-(+H.range)*86400000 }
+async function histLoad(){
+  H.loading=true; H.err=""; histRender();
+  try{
+    if(!shared||!dbRef){ H.local=true; H.rows=orders.slice() }
+    else{
+      H.local=false; const since=histSince(); let rows;
+      try{
+        let q=dbRef.collection("historico"); if(since) q=q.where("createdAt",">=",since);
+        const snap=await q.orderBy("createdAt","desc").limit(2000).get(); rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+      }catch(e1){
+        const snap=await dbRef.collection("historico").get(); rows=snap.docs.map(d=>({id:d.id,...d.data()})).filter(o=>(o.createdAt||0)>=since);
+      }
+      H.rows=rows;
+    }
+  }catch(e){ console.warn(e); H.err=e&&e.code==="permission-denied"?"Sem permissão para ler o histórico. Libere a coleção 'historico' nas regras do Firebase.":"Não foi possível carregar o histórico." }
+  H.loading=false; histRender();
+}
+const histFiltered=()=>{ const q=norm(H.q||"").trim(); return H.rows.filter(o=>!q||norm([o.cliente,o.endereco,"#"+o.n,String(o.n)].join(" ")).includes(q)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)) };
+const dayKey=t=>{const d=new Date(t);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const dayLbl=t=>new Date(t).toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"});
+function histItems(o){
+  return displayGroups(o).map(g=>g.combo
+    ?`<div class="hc"><b>${esc(g.label)}${g.fq>1?" ×"+g.fq:""}</b><span>${g.list.map(x=>x[0].q+"× "+esc(fullName(x[0]))).join(" · ")}</span></div>`
+    :g.list.map(x=>`<div class="hl">${x[0].q}× ${esc(fullName(x[0]))}</div>`).join("")).join("");
+}
+function histRender(){
+  const sum=$("#histSum"), list=$("#histList"); if(!sum||!list) return;
+  document.querySelectorAll("#histRange [data-r]").forEach(b=>b.classList.toggle("on",b.dataset.r===H.range));
+  if(H.loading){ sum.innerHTML=""; list.innerHTML='<p class="hmsg">Carregando…</p>'; return }
+  if(H.err){ sum.innerHTML=""; list.innerHTML=`<p class="hmsg err">${esc(H.err)}</p>`; return }
+  const rows=histFiltered(), tot=rows.reduce((a,o)=>a+numBR(o.total),0);
+  sum.innerHTML=`<div><b>${rows.length}</b><span>pedidos</span></div><div><b>${brl(tot)}</b><span>vendido</span></div><div><b>${rows.length?brl(tot/rows.length):brl(0)}</b><span>ticket médio</span></div>`+(H.local?'<p class="hmsg">Sem conexão com o banco: mostrando só os pedidos desta tela.</p>':"");
+  if(!rows.length){ list.innerHTML='<p class="hmsg">Nenhum pedido neste período.</p>'; return }
+  const days={}, order=[]; rows.forEach(o=>{const k=dayKey(o.createdAt||0); if(!days[k]){days[k]=[];order.push(k)} days[k].push(o)});
+  list.innerHTML=order.map(k=>{
+    const os=days[k], dt=os.reduce((a,o)=>a+numBR(o.total),0);
+    return `<div class="hday"><h4>${esc(dayLbl(os[0].createdAt||0))}<span>${os.length} ${os.length===1?"pedido":"pedidos"} · ${brl(dt)}</span></h4>`+os.map(o=>`<details class="hrow"><summary><span class="ht">${hhmm(o.createdAt||0)}</span><b>#${o.n||"?"} ${esc(o.cliente||"Sem nome")}</b><span class="hm">${esc(o.modo||"")}</span><span class="hv">${o.total?"R$ "+esc(o.total):"—"}</span><span class="hs ${o.status==="pronto"?"ok":""}">${o.status==="pronto"?"pronto":"em andamento"}</span></summary><div class="hd">${histItems(o)}<p class="hx">${o.endereco?"📍 "+esc(o.endereco)+" · ":""}${o.pagamento?"💳 "+esc(o.pagamento)+" · ":""}${o.horario?"🕒 "+esc(o.horario):""}${o.obs?"<br>📝 "+esc(o.obs):""}${o.mapa?`<br><a href="${esc(o.mapa)}" target="_blank" rel="noopener">Ver no mapa</a>`:""}</p></div></details>`).join("")+"</div>";
+  }).join("");
+}
+function histCsv(){
+  const rows=histFiltered(); if(!rows.length){ toast("Nada para baixar neste período"); return }
+  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const head=["Data","Hora","Pedido","Cliente","Tipo","Endereço","Pagamento","Total (R$)","Situação","Itens","Observação"];
+  const lines=rows.map(o=>{const d=new Date(o.createdAt||0); return [d.toLocaleDateString("pt-BR"),hhmm(o.createdAt||0),o.n,o.cliente,o.modo,o.endereco,o.pagamento,o.total,o.status==="pronto"?"pronto":"em andamento",(o.items||[]).filter(i=>!i.from).map(i=>i.q+"x "+fullName(i)).concat([...new Set((o.items||[]).filter(i=>i.from).map(i=>i.from+(i.fq>1?" x"+i.fq:"")))]).join("; "),o.obs].map(q).join(";")});
+  const blob=new Blob(["\ufeff"+[head.map(q).join(";")].concat(lines).join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="pedidos-marcio-sushi-"+dayKey(Date.now())+".csv"; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+}
+(()=>{
+  const d=$("#histDet"); if(!d) return;
+  d.addEventListener("toggle",()=>{ if(d.open) histLoad() });
+  $("#histRange").addEventListener("click",e=>{const b=e.target.closest("[data-r]"); if(!b) return; H.range=b.dataset.r; histLoad()});
+  $("#histQ").addEventListener("input",e=>{H.q=e.target.value; histRender()});
+  $("#histCsv").addEventListener("click",histCsv);
+})();
 let tt; function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2600)}
 setInterval(()=>{ if(!document.hidden) render() },30000);
 buildCfg();
