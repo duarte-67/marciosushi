@@ -651,6 +651,10 @@ const PREP={
   htem:{ico:"🍣",t:"Hot Temaki",rec:n=>`Faça ${n} hot temaki na hora`,why:"Feito na hora, perto da entrega.",chip:["Feito na hora","Feito"]}
 };
 const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+/*PRECOS_INI*/
+const TAXA_ENTREGA=10, CIDADE_TAXA="Fátima do Sul";
+const PRECOS_RAW=[["Combo 1","",142],["Combo 2","",183],["Combo 3","",222],["Combo 4","",230],["Combo 5","",296],["Uramaki Filadélfia","5 un",22],["Uramaki Salmão Grelhado com Kani","5 un",21],["Uramaki Salmão Grelhado","5 un",22],["Uramaki Croc","5 un",21],["Uramaki Salmão com Pepino","5 un",21],["Uramaki Califórnia","5 un",19],["Uramaki Alcapone","5 un",19],["Uramaki Filadélfia Especial","5 un",26],["Uramaki Filadélfia Batidinho","5 un",24],["Uramaki Salmão Grelhado Especial","5 un",24],["Uramaki Croc Especial","5 un",24],["Uramaki Califórnia Especial","5 un",20],["Uramaki Alcapone Especial","5 un",20],["Hossomaki Salmão","5 un",21],["Hossomaki Salmão Filadélfia","5 un",21],["Hossomaki Salmão Grelhado","5 un",19],["Hossomaki Grelhado + Kani","5 un",19],["Hossomaki Kani","5 un",18],["Hossomaki Pepino","5 un",18],["Hot Roll Filadélfia","5 un",21],["Hot Roll Salmão + Kani","5 un",21],["Hot Roll Geleia de Pimenta","5 un",24],["Hot Roll Salmão Batidinho","5 un",24],["Hot Roll Salmão Grelhado","5 un",24],["Hot Roll Couve Crispy","5 un",23],["Joy Salmão","1 un",7],["Joy Salmão Maçaricado + Geleia de Pimenta","1 un",8],["Joy Salmão + Brie","1 un",9],["Joy Salmão + Amêndoa","1 un",7],["Joy Salmão + Couve Crispy","1 un",6],["Joy Salmão Maçaricado + Pimenta Biquinho","1 un",6],["Joy Salmão Maçaricado + Couve Crispy","1 un",6],["Niguiri Salmão","1 un",7],["Niguiri Salmão Maçaricado Caramelizado + Cream Cheese","1 un",8],["Temaki Salmão Cru","1 un",38],["Temaki Salmão Grelhado","1 un",38],["Temaki Hot Temaki","1 un",45],["Sashimi 5 fatias de salmão","",38],["Sashimi 10 fatias de salmão","",72]];
+/*PRECOS_FIM*/
 function kindsOf(it){
   const n=norm(it.nome), k=[];
   if(/grelhad/.test(n)) k.push("grelhar");
@@ -883,6 +887,45 @@ function parseOrder(raw){
   o.modo=retirada?"Retirada":"Entrega";
   return o;
 }
+/* ---------- conferência dos valores da mensagem (contra o cardápio) ---------- */
+let _PM=null;
+const precoDe=(nome,un)=>{ if(!_PM){ _PM={}; PRECOS_RAW.forEach(([n,u,p])=>{ _PM[norm(n)+"|"+norm(u)]=p }) } return _PM[norm(nome)+"|"+norm(un)] };
+const cent=s=>Math.round(parseFloat(String(s).replace(/\./g,"").replace(",","."))*100);
+const rs=c=>"R$ "+(c/100).toFixed(2).replace(".",",");
+function checkOrder(raw){
+  const iss=[], lines=raw.split(/\r?\n/).map(l=>l.replace(/\*/g,"").trim()).filter(Boolean);
+  let soma=0, total=null, taxa=null, cidade="", ret=false, nIt=0;
+  for(const l of lines){
+    let m;
+    if((m=l.match(/^(\d+)\s*[x×]\s+(.+?)\s+[—–-]\s+R\$\s*([\d.]+,\d{2})\s*$/i))){
+      nIt++; let nome=m[2].trim(), un="";
+      const u=nome.match(/^(.*?)\s*\(([^)]+)\)\s*$/); if(u){nome=u[1].trim();un=u[2].trim()}
+      const q=parseInt(m[1],10), val=cent(m[3]); soma+=val;
+      const cb=/^combo\s*(\d)$/i.exec(nome), k=cb?"Combo "+cb[1]:"";
+      if(k&&CB_BASE[k]!==undefined){
+        const pub=CB.pub&&CB.pub[k], ok=[Math.round(CB_BASE[k]*100)];
+        if(pub){ ok.push(Math.round(cbFinal(pub)*100), Math.round(pub.preco*100)) }
+        const atual=Math.round((pub?cbFinal(pub):CB_BASE[k])*100);
+        if(!(q>0)||!ok.some(c=>c*q===val)) iss.push(`${q}x ${k}: a mensagem diz ${rs(val)}, mas o valor certo é ${rs(q*atual)}${q>1?` (${rs(atual)} cada)`:""}.`);
+      }else{
+        const p=precoDe(nome,un);
+        if(p===undefined) iss.push(`"${nome}${un?" ("+un+")":""}" não existe no cardápio (mensagem: ${rs(val)}).`);
+        else if(!(q>0)||q*Math.round(p*100)!==val) iss.push(`${q}x ${nome}${un?" ("+un+")":""}: a mensagem diz ${rs(val)}, mas o valor certo é ${rs(q*Math.round(p*100))}${q>1?` (${rs(Math.round(p*100))} cada)`:""}.`);
+      }
+    }
+    else if((m=l.match(/^Total:?\s*R\$\s*([\d.]+,\d{2})/i))) total=cent(m[1]);
+    else if((m=l.match(/^Entrega:\s*R\$\s*([\d.]+,\d{2})/i))) taxa=cent(m[1]);
+    else if((m=l.match(/^(?:Endere[çc]o|Entrega em):\s*(.+)/i))) cidade=m[1].split(/\s+[—–]\s+/).pop().replace(/\s*\(.*\)\s*$/,"").trim();
+    else if(/^Retirada/i.test(l)) ret=true;
+  }
+  if(!nIt) return iss;
+  const exp=soma+(taxa||0);
+  if(total===null) iss.push("A mensagem não tem a linha de Total.");
+  else if(total!==exp) iss.push(`O Total da mensagem é ${rs(total)}, mas os itens somam ${rs(soma)}${taxa?" + entrega "+rs(taxa)+" = "+rs(exp):""}.`);
+  if(!ret&&cidade&&norm(cidade)===norm(CIDADE_TAXA)&&taxa!==TAXA_ENTREGA*100) iss.push(taxa===null?`Falta a taxa de entrega de ${rs(TAXA_ENTREGA*100)} (${CIDADE_TAXA}).`:`A taxa de entrega na mensagem é ${rs(taxa)}, mas em ${CIDADE_TAXA} é ${rs(TAXA_ENTREGA*100)}.`);
+  if(ret&&taxa) iss.push(`A mensagem cobra entrega de ${rs(taxa)}, mas o pedido é para retirada.`);
+  return iss;
+}
 function dueFrom(horario,now,prep){
   const m=(horario||"").match(/(\d{1,2})\s*[:h]\s*(\d{2})/);
   if(!m) return {asap:true,dueAt:now+prep*60000};
@@ -890,7 +933,9 @@ function dueFrom(horario,now,prep){
   let t=d.getTime(); if(t<now-6*3600000) t+=86400000;
   return {asap:false,dueAt:t};
 }
-function addOrder(){
+let adding=false;
+async function addOrder(){
+  if(adding) return;
   const raw=$("#raw").value.trim(); $("#err").textContent="";
   if(!raw){$("#err").textContent="Cole a mensagem do pedido primeiro.";return}
   const p=parseOrder(raw);
@@ -903,10 +948,19 @@ function addOrder(){
     const v=$("#ready").value; if(!v){$("#err").textContent="Escolha a hora em que o pedido ficará pronto.";return}
     due={asap:true,dueAt:dueFrom(v,now,0).dueAt};
   }
+  adding=true; let conf=false;
+  try{
+    if(!CB.loaded&&shared&&dbRef){ try{ await Promise.race([cbLoad(),new Promise(r=>setTimeout(r,2500))]) }catch(e){} }
+    const iss=checkOrder(raw); conf=!iss.length;
+    if(iss.length){
+      const r=await askConfirm({title:"Confira os valores deste pedido",text:"A mensagem não bate com o cardápio:\n\n"+iss.map(x=>"• "+x).join("\n")+"\n\nSe o cliente mudou algum valor, não lance. Lançar mesmo assim?",ok:"Lançar mesmo assim"});
+      if(!r) return;
+    }
+  }finally{ adding=false }
   const n=orders.reduce((a,x)=>Math.max(a,x.n||0),0)+1;
   const o={id:"o"+now.toString(36)+Math.random().toString(36).slice(2,5),n,createdAt:now,dueAt:due.dueAt,asap:due.asap,status:"novo",...p};
   orders=orders.concat(o); if(seen) seen.add(o.id); persistSet(o); render();
-  $("#raw").value=""; delete $("#ready").dataset.t; $("#ready").dataset.h="x"; syncReady(); toast(`Pedido #${n} enviado à cozinha`);
+  $("#raw").value=""; delete $("#ready").dataset.t; $("#ready").dataset.h="x"; syncReady(); toast(`Pedido #${n} enviado à cozinha${conf?" · valores conferidos ✓":""}`);
 }
 
 /* ---------- ações ---------- */
