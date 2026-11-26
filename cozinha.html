@@ -489,6 +489,24 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 .sa-b .btn{flex:1;background:#fff;color:var(--burnt);border:2px solid #fff}
 .sa-b .btn.ghost{background:transparent;color:#fff}
 @keyframes sapulse{50%{background:var(--burnt)}}
+.sch{margin:0 0 18px;background:#1b2233;border:2px solid #5b7fbf;border-radius:20px;padding:14px 16px}
+.sch.hide{display:none}
+.sch h2{margin:0 0 4px;font-size:19px;color:#fff;display:flex;align-items:center;gap:8px}
+.sch h2 i{font-style:normal;background:#5b7fbf;color:#fff;border-radius:99px;padding:2px 11px;font-size:15px}
+.sch .sub{margin:0 0 6px;color:#a9b6d3;font-size:13px}
+.sch .sdh{margin:14px 0 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#a9b6d3;font-weight:800}
+.sk{display:flex;align-items:center;gap:12px;background:var(--pearl);color:var(--coal);border-radius:14px;padding:11px 13px;margin-top:8px}
+.sk .sd{flex:0 0 auto;text-align:center;min-width:54px}
+.sk .sd b{display:block;font-size:22px;color:#2f4f86;line-height:1}
+.sk .sd small{font-size:11px;font-weight:800;color:#555}
+.sk .sm{flex:1;min-width:0;font-size:13.5px;line-height:1.35}
+.sk .sm b{display:block;font-size:16px}
+.sk .sm .pt{display:inline-block;background:var(--coal);color:#fff;border-radius:99px;padding:1px 9px;font-size:12px;font-weight:800;margin-right:6px}
+.sk .sm .pt.en{background:var(--orange)}
+.sk .sm .si{color:#555}
+.sk .sb{flex:0 0 auto;display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.sk .sb .btn{padding:9px 12px;font-size:13px}
+@media(max-width:560px){.sk{flex-wrap:wrap}.sk .sb{flex-direction:row;width:100%}.sk .sb .btn{flex:1}}
 .pick{margin:0 0 18px;background:#12301f;border:2px solid var(--ok);border-radius:20px;padding:14px 16px;animation:pkpulse 1.6s 4}
 @keyframes pkpulse{50%{box-shadow:0 0 0 8px rgba(63,174,106,.28)}}
 .pick h2{margin:0 0 10px;font-size:19px;color:#fff;display:flex;align-items:center;gap:8px}
@@ -532,6 +550,7 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
 <main class="wrap">
   <div class="svinfo gerinfo hide" id="gerInfo"></div>
   <section class="pick hide" id="pickSec" aria-live="polite"></section>
+  <section class="sch hide" id="schSec"></section>
   <section class="new" id="newBox"><details id="newDet" open>
     <summary><h2>Novo pedido confirmado</h2><span class="chev" aria-hidden="true"></span></summary>
     <p>No WhatsApp, copie a mensagem do cliente, cole aqui e confirme. O pedido entra na fila da cozinha, ordenado pelo horário.</p>
@@ -680,8 +699,10 @@ function syncReady(){
   if(ct){
     if(!f.dataset.t) f.value=ct;
     const changed=f.value&&f.value!==ct;
-    $("#readyTxt").textContent=`Cliente pediu ${ct}. Pronto às`;
-    $("#readyNote").textContent=changed?`Alterado: o pedido entra às ${f.value} (cliente pediu ${ct})`:"Se não mexer, fica o horário do cliente";
+    const dt=dateOf(h), fut=dt&&dayStart(dt)>dayStart(Date.now());
+    $("#readyTxt").textContent=`Cliente pediu ${fut?dayShort(dt)+" às ":""}${ct}. Pronto às`;
+    const nt=changed?`Alterado: o pedido entra às ${f.value} (cliente pediu ${ct})`:"Se não mexer, fica o horário do cliente";
+    $("#readyNote").textContent=fut?`📅 Agendado: fica em “Agendados” e só entra na fila no dia (${dayShort(dt)}). ${nt}`:nt;
     $("#readyNote").classList.toggle("chg",!!changed);
   }else{
     if(!f.dataset.t) f.value=suggestReady();
@@ -697,6 +718,13 @@ const Local={
   save(){ls.set(KEY,JSON.stringify(orders))}
 };
 orders=Local.load();
+/* pedido agendado: fica guardado e só entra na fila (Sushiman, Painel, avisos) no dia do preparo */
+const dayStart=t=>{const d=new Date(t);d.setHours(0,0,0,0);return +d};
+const isHeld=o=>o.status==="novo"&&!o.liberado&&dayStart(o.dueAt||0)>dayStart(Date.now());
+const live=()=>orders.filter(o=>!isHeld(o));
+const dateOf=h=>{const m=(h||"").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?new Date(+m[3],+m[2]-1,+m[1]):null};
+const dayShort=t=>new Date(t).toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"}).replace(".","");
+let heldPrev=null;
 const queue={};
 let fbMode=false, histBackfill=false;
 function enqueue(id,fn){ if(fbMode){ try{ Promise.resolve(fn()).catch(onErr) }catch(e){ onErr(e) } return } queue[id]=(queue[id]||Promise.resolve()).then(fn).catch(onErr) }
@@ -931,6 +959,7 @@ function checkOrder(raw){
 function dueFrom(horario,now,prep){
   const m=(horario||"").match(/(\d{1,2})\s*[:h]\s*(\d{2})/);
   if(!m) return {asap:true,dueAt:now+prep*60000};
+  const dm=dateOf(horario); if(dm){ dm.setHours(+m[1],+m[2],0,0); return {asap:false,dueAt:+dm}; }   // pedido agendado: dia exato
   const d=new Date(now); d.setHours(+m[1],+m[2],0,0);
   let t=d.getTime(); if(t<now-6*3600000) t+=86400000;
   return {asap:false,dueAt:t};
@@ -944,7 +973,7 @@ async function addOrder(){
   if(!p.items.length){$("#err").textContent="Não encontrei itens nessa mensagem. Cole o texto completo do pedido.";return}
   const now=Date.now(); let due;
   const ct=clientTime(p.horario), fv=$("#ready").value;
-  if(ct&&fv&&fv!==ct){ due={asap:false,dueAt:dueFrom(fv,now,0).dueAt}; p.horarioCliente=p.horario; p.horario="Hoje às "+fv; }
+  if(ct&&fv&&fv!==ct){ p.horarioCliente=p.horario; p.horario=dateOf(p.horario)?p.horario.replace(TM_RE,fv):"Hoje às "+fv; due={asap:false,dueAt:dueFrom(p.horario,now,0).dueAt}; }
   else if(ct) due=dueFrom(p.horario,now,0);
   else{
     const v=$("#ready").value; if(!v){$("#err").textContent="Escolha a hora em que o pedido ficará pronto.";return}
@@ -962,7 +991,8 @@ async function addOrder(){
   const n=orders.reduce((a,x)=>Math.max(a,x.n||0),0)+1;
   const o={id:"o"+now.toString(36)+Math.random().toString(36).slice(2,5),n,createdAt:now,dueAt:due.dueAt,asap:due.asap,status:"novo",...p};
   orders=orders.concat(o); if(seen) seen.add(o.id); persistSet(o); render();
-  $("#raw").value=""; delete $("#ready").dataset.t; $("#ready").dataset.h="x"; syncReady(); toast(`Pedido #${n} enviado à cozinha${conf?" · valores conferidos ✓":""}`);
+  $("#raw").value=""; delete $("#ready").dataset.t; $("#ready").dataset.h="x"; syncReady();
+  toast(isHeld(o)?`📅 Pedido #${n} agendado para ${dayShort(o.dueAt)} às ${hhmm(o.dueAt)} · entra na fila no dia${conf?" · valores conferidos ✓":""}`:`Pedido #${n} enviado à cozinha${conf?" · valores conferidos ✓":""}`);
 }
 
 /* ---------- ações ---------- */
@@ -1001,6 +1031,7 @@ document.addEventListener("click",e=>{
   else if(a==="focus"){ focusId=id; render(); }
   else if(a==="start") patch(id,()=>({status:"preparando",startedAt:Date.now()}));
   else if(a==="finish") patch(id,o=>({status:"pronto",doneAt:Date.now(),items:o.items.map(it=>({...it,done:true}))}));
+  else if(a==="schgo"){ const o=orders.find(x=>x.id===id); patch(id,()=>({liberado:true})); if(o) toast(`Pedido #${o.n} trazido para a fila`); }
   else if(a==="reopen") patch(id,()=>({status:"preparando",doneAt:null,entregue:null}));
   else if(a==="hand") patch(id,()=>({entregue:Date.now()}));
   else if(a==="del"){
@@ -1054,7 +1085,7 @@ function baseView(act){
   let firstV=true;
   const gs=Object.values(B).sort((a,b)=>a.tier-b.tier||a.rank-b.rank||a.first-b.first);
   const nTiers=new Set(gs.map(g=>g.tier)).size;
-  const ready=orders.filter(o=>o.status!=="pronto"&&o.items.length&&o.items.every(i=>i.done));
+  const ready=live().filter(o=>o.status!=="pronto"&&o.items.length&&o.items.every(i=>i.done));
   const totalPcs=gs.reduce((a,g)=>a+g.pcs,0);
   let h=gs.map((g,gi)=>{
     const vs=g.vs, multi=vs.length>1, hasEsp=vs.some(v=>v.esp);
@@ -1075,7 +1106,7 @@ function baseView(act){
 }
 
 /* ---------- sushiman: pedido atual + teclado ---------- */
-const activeList=()=>orders.filter(o=>o.status!=="pronto").sort((a,b)=>a.dueAt-b.dueAt||a.createdAt-b.createdAt);
+const activeList=()=>live().filter(o=>o.status!=="pronto").sort((a,b)=>a.dueAt-b.dueAt||a.createdAt-b.createdAt);
 const curOrder=()=>{const a=activeList();return a.find(o=>o.id===focusId)||a[0]||null};
 const typeOf=cat=>{const c=CATS.find(x=>x[1]===cat);return c?c[0]:""};
 const fullName=it=>{const c=CATS.find(x=>x[1]===it.cat);return c?c[0]+" "+it.nome:it.nome};
@@ -1223,17 +1254,20 @@ function render(){
   tickSvInfo();
   document.querySelectorAll("[data-sv]").forEach(b=>b.classList.toggle("on",b.dataset.sv===sview));
   $("#prepView").classList.toggle("hide",!sv);
-  tickClock(); tickStart(); renderPick();
+  tickClock(); tickStart(); renderPick(); renderSched();
   $("#snd").classList.toggle("hide",mode!=="sushiman");
   $("#snd").classList.toggle("on",audioOn);
   $("#snd").textContent=audioOn?"🔔 Aviso sonoro: ligado":"🔔 Aviso sonoro: desligado";
   if(seen===null) seen=new Set(orders.map(o=>o.id));
-  else{ const fresh=orders.filter(o=>!seen.has(o.id)); fresh.forEach(o=>seen.add(o.id)); if(fresh.length&&audioOn&&!rec){beep();toast("Novo pedido na fila")} }
+  else{ const fresh=live().filter(o=>!seen.has(o.id)); fresh.forEach(o=>seen.add(o.id)); if(fresh.length&&audioOn&&!rec){beep();toast("Novo pedido na fila")} }
   const act=activeList();
   curId=mode==="sushiman"?((act.find(o=>o.id===focusId)||act[0]||{}).id||null):null;
   $("#keys").classList.toggle("hide",!kan);
   const dn=orders.filter(o=>o.status==="pronto").sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
-  $("#count").textContent=act.length?`${act.length} na fila`:"fila vazia";
+  { const hn=new Set(orders.filter(isHeld).map(o=>o.id));
+    if(heldPrev){ const rel=orders.filter(o=>heldPrev.has(o.id)&&!hn.has(o.id)&&o.status==="novo"); if(rel.length){ toast(`📅 Agendado entrou na fila: ${rel.map(o=>"#"+o.n).join(", ")}`); if(audioOn&&!rec) beep() } }
+    heldPrev=hn;
+    $("#count").textContent=(act.length?`${act.length} na fila`:"fila vazia")+(hn.size?` · 📅 ${hn.size} agendado${hn.size>1?"s":""}`:""); }
   production(act);
   $("#prepSec").classList.toggle("hide",!rec);
   if(rec) prepPanel(act);
@@ -1284,11 +1318,11 @@ function taskRows(o){
   });
   return rows;
 }
-const fryingNow=()=>orders.reduce((a,o)=>o.status==="pronto"?a:a+runsOf(o,"hot").reduce((s,r)=>s+r.n,0),0);
+const fryingNow=()=>live().reduce((a,o)=>o.status==="pronto"?a:a+runsOf(o,"hot").reduce((s,r)=>s+r.n,0),0);
 const fryFree=()=>Math.max(0,capP()-fryingNow());
 function allRuns(){
   const g={};
-  orders.forEach(o=>{ if(o.status==="pronto") return;
+  live().forEach(o=>{ if(o.status==="pronto") return;
     Object.keys(o.runs||{}).forEach(k=>runsOf(o,k).forEach(r=>{
       const x=g[r.id]=g[r.id]||{id:r.id,k,t0:r.t0,dur:r.dur,n:0,parts:[]}; x.n+=r.n; x.parts.push({o,n:r.n});
     }));
@@ -1454,18 +1488,18 @@ let ack=new Set(); try{ ack=new Set(JSON.parse(ls.get(ACKKEY,"[]"))) }catch(e){}
 const saveAck=()=>ls.set(ACKKEY,JSON.stringify([...ack].slice(-300)));
 let startHtml="", startBeepAt=0, startTitle="";
 const FRYK=["hot","croc"], FRYON="ms-kitchen-fryon";
-const fryIsOn=()=>Date.now()-(+ls.get(FRYON,"0"))<60*60000||fryingNow()>0||orders.some(o=>o.status!=="pronto"&&runsOf(o,"croc").length>0);
+const fryIsOn=()=>Date.now()-(+ls.get(FRYON,"0"))<60*60000||fryingNow()>0||live().some(o=>o.status!=="pronto"&&runsOf(o,"croc").length>0);
 function fryerDue(){
   if(fryIsOn()) return null;
   const now=Date.now(), w=(+LEAD.fritadeira||10)*60000; let at=Infinity;
-  orders.forEach(o=>{ if(o.status==="pronto") return;
+  live().forEach(o=>{ if(o.status==="pronto") return;
     taskRows(o).forEach(r=>{ if(!FRYK.includes(r.k)||r.pend<=0) return; const a=o.dueAt-leadOf(r.k); if(a<at) at=a });
   });
   return at-w<=now?{at}:null;
 }
 function dueStarts(){
   const now=Date.now(), w=(+LEAD.aviso||5)*60000, by={};
-  orders.forEach(o=>{ if(o.status==="pronto") return;
+  live().forEach(o=>{ if(o.status==="pronto") return;
     taskRows(o).forEach(r=>{
       if(r.pend<=0) return;
       const at=o.dueAt-leadOf(r.k); if(now<at-w) return;
@@ -1508,6 +1542,21 @@ function renderPick(){
   /* aviso só para pedido que ficou pronto agora (não para os que já estavam prontos ao abrir a página) */
   if(fresh.some(o=>Date.now()-(o.doneAt||0)<120000)){ alarmBeep(); try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){} toast("📦 Pedido pronto: "+fresh.map(o=>"#"+o.n).join(", ")); el.classList.remove("hide"); el.style.animation="none"; void el.offsetWidth; el.style.animation="" }
   pickTitle=list.length?`📦 ${list.length} aguardando retirada`:"";
+}
+let schHtml="";
+function renderSched(){
+  const el=$("#schSec"); if(!el) return;
+  const list=mode==="recepcao"?orders.filter(isHeld).sort((a,b)=>a.dueAt-b.dueAt||a.createdAt-b.createdAt):[];
+  const days={}, ord=[]; list.forEach(o=>{ const k=dayKey(o.dueAt); if(!days[k]){days[k]=[];ord.push(k)} days[k].push(o) });
+  const rel=t=>{ const n=Math.round((dayStart(t)-dayStart(Date.now()))/864e5); return n===1?"amanhã":"em "+n+" dias" };
+  const html=list.length?`<h2>📅 Agendados <i>${list.length}</i></h2><p class="sub">Ficam guardados aqui e entram na fila da cozinha só no dia do preparo.</p>`+ord.map(k=>{
+    const os=days[k];
+    return `<div class="sdh">${esc(dayShort(os[0].dueAt))} · ${rel(os[0].dueAt)}</div>`+os.map(o=>{
+      const en=o.modo==="Entrega", its=o.items.slice(0,4).map(i=>i.q+"× "+esc(fullName(i))).join(" · ")+(o.items.length>4?` · +${o.items.length-4}`:"");
+      return `<div class="sk"><div class="sd"><b>${hhmm(o.dueAt)}</b><small>${esc(dayShort(o.dueAt))}</small></div><div class="sm"><b>#${o.n} ${esc(o.cliente||"Cliente")}</b><span class="pt${en?" en":""}">${en?"Entrega":"Retirada"}</span>${o.total?`<span>${esc(o.total)}</span> · `:""}<span>${esc(o.pagamento||"")}</span>${en&&o.endereco?`<br>📍 ${esc(o.endereco)}`:""}<br><span class="si">${its}</span></div><div class="sb"><button class="btn" data-act="schgo" data-o="${esc(o.id)}">Trazer para a fila</button><button class="btn ghost" data-act="del" data-o="${esc(o.id)}">Remover</button></div></div>`;
+    }).join("");
+  }).join(""):"";
+  if(html!==schHtml){ schHtml=html; el.innerHTML=html; el.classList.toggle("hide",!html) }
 }
 function tickPick(){ document.querySelectorAll("#pickSec [data-since]").forEach(e=>{e.textContent="pronto "+waitTxt(+e.dataset.since)}) }
 let svHtml="";
@@ -1588,7 +1637,7 @@ function viewCard(o){
 }
 function viewPanel(act,dn){
   const late=act.filter(o=>o.dueAt<Date.now()).length;
-  const open=act.reduce((a,o)=>a+money(o.total),0), all=orders.reduce((a,o)=>a+money(o.total),0);
+  const open=act.reduce((a,o)=>a+money(o.total),0), all=live().reduce((a,o)=>a+money(o.total),0);
   const box=(b,l)=>`<div><b>${b}</b><small>${l}</small></div>`;
   $("#vsum").innerHTML=box(act.filter(o=>o.status==="novo").length,"Na fila")+box(act.filter(o=>o.status==="preparando").length,"Preparando")+box(dn.length,"Prontos")+box(late,"Atrasados")+box(brl(open),"Em aberto")+box(brl(all),"Total do dia");
   $("#vgrid").innerHTML=act.length?act.map(viewCard).join(""):`<div class="empty" style="grid-column:1/-1">Sem pedidos em andamento. 🍣</div>`;

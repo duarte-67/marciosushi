@@ -194,6 +194,11 @@ footer strong{color:var(--coal)}
 .seg input:focus-visible+span{outline:2px solid var(--coal);outline-offset:2px}
 input[type=text],input[type=time],textarea{width:100%;font:inherit;font-size:16px;padding:13px 14px;border-radius:14px;border:1.5px solid var(--line);background:#fff;color:var(--coal)}
 input[type=text]:focus,input[type=time]:focus,textarea:focus{outline:none;border-color:var(--orange)}
+.whenrow{display:grid;grid-template-columns:1.35fr 1fr;gap:10px}
+.wf{display:block}
+.wf>span{display:block;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 5px 3px}
+.wf select{width:100%;font:inherit;font-size:16px;padding:13px 12px;border-radius:14px;border:1.5px solid var(--line);background:#fff;color:var(--coal);appearance:auto}
+.wf select:focus{outline:none;border-color:var(--orange)}
 textarea{resize:none;min-height:68px}
 .locbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;border-radius:14px;border:1.5px dashed var(--orange);background:rgba(240,90,30,.06);color:var(--burnt);font-weight:700;font-size:15px}
 .locbtn.ok{border-style:solid;background:rgba(40,150,80,.09);border-color:#2f9a58;color:#1f7a42}
@@ -297,11 +302,14 @@ textarea{resize:none;min-height:68px}
       <span class="lbl">Horário de preferência</span>
       <div class="seg" id="hor">
         <label><input type="radio" name="hor" value="asap" checked><span>O quanto antes</span></label>
-        <label><input type="radio" name="hor" value="hora"><span>Escolher horário</span></label>
+        <label><input type="radio" name="hor" value="hora"><span>Escolher dia e hora</span></label>
       </div>
       <div id="horBox" style="display:none;margin-top:10px">
-        <input type="time" id="hora" aria-label="Horário desejado para hoje">
-        <p class="note" style="text-align:left;margin-top:6px">Para hoje. Confirmamos a disponibilidade pelo WhatsApp.</p>
+        <div class="whenrow">
+          <label class="wf"><span>Dia</span><select id="dia" aria-label="Dia desejado"></select></label>
+          <label class="wf"><span>Horário</span><input type="time" id="hora" aria-label="Horário desejado"></label>
+        </div>
+        <p class="note" id="horNote" style="text-align:left;margin-top:8px">Para hoje. Confirmamos a disponibilidade pelo WhatsApp.</p>
       </div>
 
       <span class="lbl">Pagamento</span>
@@ -544,7 +552,7 @@ document.addEventListener("click",e=>{
 
 /* sheet */
 const sheet=$("#sheet"), ov=$("#ov");
-function open(){ sheet.classList.add("show"); ov.classList.add("show"); document.body.style.overflow="hidden"; }
+function open(){ buildDias(); sheet.classList.add("show"); ov.classList.add("show"); document.body.style.overflow="hidden"; }
 function close(){ sheet.classList.remove("show"); ov.classList.remove("show"); document.body.style.overflow=""; }
 $("#openCart").onclick=open; $("#close").onclick=close; ov.onclick=close;
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") close(); });
@@ -603,6 +611,7 @@ const MSG = {
   horario:   "*Horário:*",
   asap:      "O quanto antes",
   hoje:      "Hoje às",
+  agendado:  "Agendado para",
   pagamento: "*Pagamento:*",
   obs:       "*Obs.:*",
   localizacao: "*Localização (Google Maps):*",
@@ -623,17 +632,38 @@ function message(ids, sub, del){
   L.push(`${MSG.nome} ${$("#nome").value.trim()}`);
   L.push(modo()==="Entrega" ? `${MSG.endereco} ${$("#end").value.trim()} — ${cidade()}${aCombinar()?" (Mais Delivery)":""}` : MSG.retirada);
   if(modo()==="Entrega" && loc) L.push(`${MSG.localizacao} ${mapsUrl(loc)}`);
-  L.push(`${MSG.horario} ${hor()==="hora" ? MSG.hoje+" "+$("#hora").value : MSG.asap}`);
+  L.push(`${MSG.horario} ${hor()==="hora" ? quando() : MSG.asap}`);
   L.push(`${MSG.pagamento} ${pag()}${pag()==="Cartão"?" (somente aproximação)":""}`);
   const o=$("#obs").value.trim(); if(o) L.push(`${MSG.obs} ${o}`);
   L.push("", MSG.fecho);
   return L.join("\n");
 }
 
+/* ---------- agendamento: escolher o dia e a hora (até 30 dias à frente) ---------- */
+const pad2=n=>String(n).padStart(2,"0");
+const isoDate=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+function buildDias(){
+  const sel=$("#dia"), keep=sel.value, now=new Date(), o=[];
+  for(let i=0;i<=30;i++){
+    const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+i), w=d.toLocaleDateString("pt-BR",{weekday:"short"}).replace(".",""), dm=pad2(d.getDate())+"/"+pad2(d.getMonth()+1);
+    o.push(`<option value="${isoDate(d)}">${i===0?"Hoje · "+dm:i===1?"Amanhã · "+dm:w.charAt(0).toUpperCase()+w.slice(1)+", "+dm}</option>`);
+  }
+  sel.innerHTML=o.join(""); sel.value=[...sel.options].some(x=>x.value===keep)?keep:sel.options[0].value;
+}
+const diaSel=()=>{ const v=$("#dia").value.split("-"); return new Date(+v[0],+v[1]-1,+v[2]); };
+const isHoje=()=>$("#dia").value===isoDate(new Date());
+function quando(){
+  const h=$("#hora").value; if(isHoje()) return MSG.hoje+" "+h;
+  const d=diaSel(); return `${MSG.agendado} ${d.toLocaleDateString("pt-BR",{weekday:"long"})}, ${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} às ${h}`;
+}
+buildDias();
 function missing(){
   if(!$("#nome").value.trim()) return "Informe seu nome para continuar.";
   if(modo()==="Entrega" && !$("#end").value.trim()) return "Informe o endereço de entrega.";
-  if(hor()==="hora" && !$("#hora").value) return "Escolha o horário desejado.";
+  if(hor()==="hora"){
+    if(!$("#hora").value) return "Escolha o horário desejado.";
+    if(isHoje()){ const [H,M]=$("#hora").value.split(":"), n=new Date(); if(+H*60+ +M < n.getHours()*60+n.getMinutes()) return "Esse horário de hoje já passou. Escolha outro horário ou outro dia."; }
+  }
   return "";
 }
 
@@ -645,6 +675,7 @@ function update(ids, sub, del){
       pn.innerHTML = pag()==="Cartão" ? `<b>Combos no cartão: valor cheio</b>O desconto dos combos vale só no <u>Pix ou dinheiro</u>. Pagando assim você economiza <b class="eco">${brl(eco)}</b>.` : `<b>Desconto de combo aplicado ✓</b>Vale no Pix ou dinheiro. No cartão o combo sai pelo valor cheio.`;
     } else { pn.className="pixnote"; pn.innerHTML=""; } }
   $("#horBox").style.display = hor()==="hora" ? "" : "none";
+  if(hor()==="hora") $("#horNote").textContent = isHoje() ? "Para hoje. Confirmamos a disponibilidade pelo WhatsApp." : "Pedido agendado"+($("#hora").value?" para "+diaSel().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})+" às "+$("#hora").value:"")+". Confirmamos o dia e o horário pelo WhatsApp.";
   ids = ids || Object.keys(cart).filter(k=>cart[k]>0);
   if(!ids.length) return;
   sub = sub ?? ids.reduce((a,k)=>a+cart[k]*unit(ITEMS[k]),0);
