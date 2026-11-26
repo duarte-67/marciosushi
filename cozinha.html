@@ -584,7 +584,7 @@ body.ks .vr .btn{font-size:20px;padding:16px 26px;border-radius:16px}
   <section class="sec hide" id="cbSec">
     <details class="cfg hist cbp" id="cbDet"><summary>🏷️ Combos: preços e desconto <small id="cbSum"></small></summary>
       <div class="histbody">
-        <p class="hmsg" style="margin-top:0">Mude o preço normal ou dê desconto só nos combos. O desconto aparece para o cliente com o preço antigo riscado. Só vale depois de apertar “Publicar”.</p>
+        <p class="hmsg" style="margin-top:0">Mude o preço normal ou dê desconto só nos combos. O desconto vale só no Pix ou dinheiro (no cartão o cliente paga o preço normal). Aparece para o cliente com o preço antigo riscado. Só vale depois de apertar “Publicar”.</p>
         <div id="cbList"></div>
         <div class="cbact"><button class="btn" id="cbPub">Publicar preços</button><button class="btn ghost" id="cbZero">Zerar todos os descontos</button><button class="btn ghost" id="cbReload">Descartar mudanças</button></div>
       </div>
@@ -894,7 +894,7 @@ const cent=s=>Math.round(parseFloat(String(s).replace(/\./g,"").replace(",",".")
 const rs=c=>"R$ "+(c/100).toFixed(2).replace(".",",");
 function checkOrder(raw){
   const iss=[], lines=raw.split(/\r?\n/).map(l=>l.replace(/\*/g,"").trim()).filter(Boolean);
-  let soma=0, total=null, taxa=null, cidade="", ret=false, nIt=0;
+  let soma=0, total=null, taxa=null, cidade="", ret=false, nIt=0, cartao=false; const cbs=[];
   for(const l of lines){
     let m;
     if((m=l.match(/^(\d+)\s*[x×]\s+(.+?)\s+[—–-]\s+R\$\s*([\d.]+,\d{2})\s*$/i))){
@@ -902,12 +902,8 @@ function checkOrder(raw){
       const u=nome.match(/^(.*?)\s*\(([^)]+)\)\s*$/); if(u){nome=u[1].trim();un=u[2].trim()}
       const q=parseInt(m[1],10), val=cent(m[3]); soma+=val;
       const cb=/^combo\s*(\d)$/i.exec(nome), k=cb?"Combo "+cb[1]:"";
-      if(k&&CB_BASE[k]!==undefined){
-        const pub=CB.pub&&CB.pub[k], ok=[Math.round(CB_BASE[k]*100)];
-        if(pub){ ok.push(Math.round(cbFinal(pub)*100), Math.round(pub.preco*100)) }
-        const atual=Math.round((pub?cbFinal(pub):CB_BASE[k])*100);
-        if(!(q>0)||!ok.some(c=>c*q===val)) iss.push(`${q}x ${k}: a mensagem diz ${rs(val)}, mas o valor certo é ${rs(q*atual)}${q>1?` (${rs(atual)} cada)`:""}.`);
-      }else{
+      if(k&&CB_BASE[k]!==undefined){ cbs.push({q,k,val}); }
+      else{
         const p=precoDe(nome,un);
         if(p===undefined) iss.push(`"${nome}${un?" ("+un+")":""}" não existe no cardápio (mensagem: ${rs(val)}).`);
         else if(!(q>0)||q*Math.round(p*100)!==val) iss.push(`${q}x ${nome}${un?" ("+un+")":""}: a mensagem diz ${rs(val)}, mas o valor certo é ${rs(q*Math.round(p*100))}${q>1?` (${rs(Math.round(p*100))} cada)`:""}.`);
@@ -917,7 +913,13 @@ function checkOrder(raw){
     else if((m=l.match(/^Entrega:\s*R\$\s*([\d.]+,\d{2})/i))) taxa=cent(m[1]);
     else if((m=l.match(/^(?:Endere[çc]o|Entrega em):\s*(.+)/i))) cidade=m[1].split(/\s+[—–]\s+/).pop().replace(/\s*\(.*\)\s*$/,"").trim();
     else if(/^Retirada/i.test(l)) ret=true;
+    else if((m=l.match(/^Pagamento:\s*(.+)/i))) cartao=/cart[aã]o/i.test(m[1]);
   }
+  cbs.forEach(({q,k,val})=>{   // desconto dos combos vale só no Pix/dinheiro; no cartão é o valor cheio
+    const pub=CB.pub&&CB.pub[k], cheio=Math.round((pub?pub.preco:CB_BASE[k])*100), final=Math.round((pub?cbFinal(pub):CB_BASE[k])*100);
+    const ok=cartao?[cheio]:[final,cheio], certo=cartao?cheio:final;
+    if(!(q>0)||!ok.some(c=>c*q===val)) iss.push(cartao&&final!==cheio&&val===q*final?`${q}x ${k}: a mensagem cobra ${rs(val)} (com desconto), mas no cartão o combo sai pelo valor cheio: ${rs(q*cheio)}. O desconto é só no Pix ou dinheiro.`:`${q}x ${k}: a mensagem diz ${rs(val)}, mas o valor certo é ${rs(q*certo)}${q>1?` (${rs(certo)} cada)`:""}${cartao&&final!==cheio?" no cartão":""}.`);
+  });
   if(!nIt) return iss;
   const exp=soma+(taxa||0);
   if(total===null) iss.push("A mensagem não tem a linha de Total.");
@@ -1664,7 +1666,7 @@ function cbRender(){
   L.innerHTML=(CB.err?`<p class="hmsg err">${esc(CB.err)}</p>`:"")+Object.keys(CB_BASE).map(k=>{const c=CB.work[k];
     return `<div class="cbrow" data-k="${esc(k)}"><b>${esc(k)}${c.pct>0?`<i>−${pcShow(c.pct)}%</i>`:""}</b>
       <label>Preço normal (R$)<input data-f="preco" inputmode="decimal" value="${String(c.preco).replace(".",",")}"></label>
-      <label>Desconto (%)<input data-f="pct" inputmode="decimal" value="${c.pct?pcShow(c.pct):""}" placeholder="0"></label>
+      <label>Desconto Pix/dinheiro (%)<input data-f="pct" inputmode="decimal" value="${c.pct?pcShow(c.pct):""}" placeholder="0"></label>
       <label>Preço final (R$)<input data-f="final" inputmode="decimal" value="${String(cbFinal(c)).replace(".",",")}"></label></div>`}).join("");
   $("#cbPub").disabled=!dirty; $("#cbPub").style.opacity=dirty?1:.5;
 }

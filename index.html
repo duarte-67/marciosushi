@@ -101,6 +101,7 @@ button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 .star{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pearl);background:var(--orange);border-radius:99px;padding:3px 8px}
 .row .ds{grid-column:1;font-size:13px;color:var(--muted)}
 .row .pr{font-family:var(--serif);font-weight:600;font-size:18px;text-align:right;white-space:nowrap}
+.row .pr .pxn{display:block;font-family:var(--sans);font-weight:700;font-size:10.5px;color:#1f6b41;margin-top:3px;letter-spacing:.01em}
 .row .pr s{display:block;font-family:var(--sans);font-weight:500;font-size:12.5px;color:#8a8784;line-height:1.1}
 .row .pr .off{display:inline-block;font-family:var(--sans);font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--orange);border-radius:99px;padding:2px 7px;margin-left:6px;vertical-align:2px}
 .row .ctl{grid-column:2;grid-row:2;justify-self:end}
@@ -183,6 +184,12 @@ footer strong{color:var(--coal)}
 .nfcwarn{display:none;margin-top:10px;background:rgba(240,90,30,.1);border:1.5px solid var(--orange);border-radius:14px;padding:11px 13px;font-size:13.5px;line-height:1.4;color:var(--coal)}
 .nfcwarn b{display:block;font-size:14.5px;color:var(--burnt);margin-bottom:2px}
 .nfcwarn.show{display:block}
+.pixnote{display:none;margin-top:10px;background:rgba(46,139,87,.1);border:1.5px solid rgba(46,139,87,.55);border-radius:14px;padding:11px 13px;font-size:13.5px;line-height:1.4;color:var(--coal)}
+.pixnote.show{display:block}
+.pixnote.card{background:rgba(240,90,30,.08);border-color:rgba(240,90,30,.55)}
+.pixnote b{display:block;font-size:14.5px;margin-bottom:2px;color:#1f6b41}
+.pixnote.card b{color:var(--burnt)}
+.pixnote b.eco{display:inline;font-size:inherit;margin:0;color:inherit}
 .seg input:checked+span{border-color:var(--orange);background:rgba(240,90,30,.08);color:var(--burnt)}
 .seg input:focus-visible+span{outline:2px solid var(--coal);outline-offset:2px}
 input[type=text],input[type=time],textarea{width:100%;font:inherit;font-size:16px;padding:13px 14px;border-radius:14px;border:1.5px solid var(--line);background:#fff;color:var(--coal)}
@@ -303,6 +310,7 @@ textarea{resize:none;min-height:68px}
         <label><input type="radio" name="pag" value="Cartão"><span>Cartão<small class="nfc">só aproximação</small></span></label>
         <label><input type="radio" name="pag" value="Dinheiro"><span>Dinheiro</span></label>
       </div>
+      <div class="pixnote" id="pixNote" role="note"></div>
       <div class="nfcwarn" id="nfcWarn" role="note"><b>📲 Cartão somente por aproximação</b>Nossa maquininha aceita apenas cartão ou celular por aproximação. <u>Não aceitamos cartão de inserir (com chip e senha).</u></div>
 
       <span class="lbl">Observações (opcional)</span>
@@ -506,6 +514,8 @@ function ctl(id, small){
   return `<div class="step"><button data-a="dec" data-id="${id}" aria-label="Remover">−</button><span>${q}</span><button data-a="inc" data-id="${id}" aria-label="Adicionar mais">+</button></div>`;
 }
 
+/* desconto dos combos vale só no Pix ou dinheiro: no cartão, valor cheio */
+function unit(it){ const r=document.querySelector("[name=pag]:checked"); return (it.pct && r && r.value==="Cartão") ? it.orig : it.preco; }
 function refresh(){
   saveMem();
   Object.keys(ITEMS).forEach(id=>{
@@ -515,7 +525,7 @@ function refresh(){
   });
   const ids = Object.keys(cart).filter(k=>cart[k]>0);
   const n = ids.reduce((a,k)=>a+cart[k],0);
-  const sub = ids.reduce((a,k)=>a+cart[k]*ITEMS[k].preco,0);
+  const sub = ids.reduce((a,k)=>a+cart[k]*unit(ITEMS[k]),0);
   $("#bCount").textContent = n;
   $("#bTotal").textContent = brl(sub);
   $("#bar").classList.toggle("show", n>0);
@@ -561,8 +571,8 @@ function renderSheet(ids, sub){
   lines.innerHTML = ids.map(id=>{
     const it=ITEMS[id], q=cart[id];
     return `<div class="li">
-      <div><div class="n">${it.nome}</div><div class="u">${it.sec}${it.un?" · "+it.un:""} · ${brl(it.preco)}</div></div>
-      <div class="t">${brl(q*it.preco)}</div>
+      <div><div class="n">${it.nome}</div><div class="u">${it.sec}${it.un?" · "+it.un:""} · ${brl(unit(it))}</div></div>
+      <div class="t">${brl(q*unit(it))}</div>
       <div class="step"><button data-a="dec" data-id="${id}" aria-label="Remover">−</button><span>${q}</span><button data-a="inc" data-id="${id}" aria-label="Adicionar mais">+</button></div>
     </div>`;
   }).join("");
@@ -603,9 +613,9 @@ function message(ids, sub, del){
   const L = [MSG.saudacao, ""];
   ids.forEach(id=>{
     const it=ITEMS[id], q=cart[id];
-    L.push(MSG.item(q, (it.pre?it.pre+" ":"")+it.nome, it.un, brl(q*it.preco)));
+    L.push(MSG.item(q, (it.pre?it.pre+" ":"")+it.nome, it.un, brl(q*unit(it))));
     if(it.comp) it.comp.forEach(c=>L.push("   ↳ "+c));
-    if(it.pct) L.push(`   ↳ Desconto de ${it.pct}% aplicado (de ${brl(q*it.orig)})`);
+    if(it.pct && unit(it)!==it.orig) L.push(`   ↳ Desconto de ${it.pct}% no Pix/dinheiro aplicado (de ${brl(q*it.orig)})`);
   });
   L.push("");
   if(aCombinar()){ L.push(`${MSG.entrega}: a combinar (Mais Delivery)`); L.push(`${MSG.total} ${brl(sub)} + frete`, ""); }
@@ -629,10 +639,15 @@ function missing(){
 
 function update(ids, sub, del){
   $("#nfcWarn").classList.toggle("show", pag()==="Cartão");
+  { const dk=Object.keys(cart).filter(k=>cart[k]>0&&ITEMS[k]&&ITEMS[k].pct), pn=$("#pixNote");
+    if(dk.length){ const eco=dk.reduce((a,k)=>a+cart[k]*(ITEMS[k].orig-ITEMS[k].preco),0);
+      pn.className="pixnote show"+(pag()==="Cartão"?" card":"");
+      pn.innerHTML = pag()==="Cartão" ? `<b>Combos no cartão: valor cheio</b>O desconto dos combos vale só no <u>Pix ou dinheiro</u>. Pagando assim você economiza <b class="eco">${brl(eco)}</b>.` : `<b>Desconto de combo aplicado ✓</b>Vale no Pix ou dinheiro. No cartão o combo sai pelo valor cheio.`;
+    } else { pn.className="pixnote"; pn.innerHTML=""; } }
   $("#horBox").style.display = hor()==="hora" ? "" : "none";
   ids = ids || Object.keys(cart).filter(k=>cart[k]>0);
   if(!ids.length) return;
-  sub = sub ?? ids.reduce((a,k)=>a+cart[k]*ITEMS[k].preco,0);
+  sub = sub ?? ids.reduce((a,k)=>a+cart[k]*unit(ITEMS[k]),0);
   del = del ?? feeNow();
   const ok = !missing();
   const a = $("#send");
@@ -641,7 +656,7 @@ function update(ids, sub, del){
   if(ok) $("#hint").textContent="";
 }
 ["input","change"].forEach(ev=>document.getElementById("sheet").addEventListener(ev,e=>{
-  if(e.target.matches("[name=modo],[name=cid]")) refresh(); else update();
+  if(e.target.matches("[name=modo],[name=cid],[name=pag]")) refresh(); else update();
   saveMem();
 }));
 $("#send").addEventListener("click",e=>{
@@ -652,7 +667,7 @@ $("#send").addEventListener("click",e=>{
 $("#copy").addEventListener("click",async()=>{
   const ids = Object.keys(cart).filter(k=>cart[k]>0); if(!ids.length) return;
   const m = missing(); if(m){ $("#hint").textContent=m; return; }
-  const sub = ids.reduce((a,k)=>a+cart[k]*ITEMS[k].preco,0);
+  const sub = ids.reduce((a,k)=>a+cart[k]*unit(ITEMS[k]),0);
   const txt = message(ids,sub,feeNow());
   const btn=$("#copy");
   try{ await navigator.clipboard.writeText(txt); btn.textContent="Pedido copiado ✓"; }
@@ -756,7 +771,7 @@ function renderAgain(){
   const show = histAll ? list : list.slice(0,HIST_SHOW);
   box.hidden=false;
   box.innerHTML = `<h2>Peça de novo</h2><p class="sub">Seus últimos pedidos, prontos para repetir.</p>` + show.map(({o,r},n)=>{
-    const tot = r.ok.reduce((a,x)=>a+x.q*ITEMS[x.k].preco,0);
+    const tot = r.ok.reduce((a,x)=>a+x.q*unit(ITEMS[x.k]),0);
     return `<div class="ag"><div class="top"><span>${histWhen(o.t)}</span><b>${brl(tot)}</b></div>
       <ul>${r.ok.map(x=>`<li><span>${x.q}x</span>${(ITEMS[x.k].pre?ITEMS[x.k].pre+" ":"")+ITEMS[x.k].nome}</li>`).join("")}</ul>
       ${r.gone.length?`<p class="gone">${r.gone.length===1?"1 item não está mais":r.gone.length+" itens não estão mais"} no cardápio e ficou de fora.</p>`:""}
@@ -870,7 +885,7 @@ storeStatus(); setInterval(storeStatus, 30000);
       if(!(base>0)||pct<0||pct>90) return;
       const fin=Math.round(base*(1-pct/100)*100)/100, id="combo-"+i, row=document.getElementById("r-"+id); if(!row||!ITEMS[id]) return;
       ITEMS[id].preco=fin; ITEMS[id].orig=pct>0?base:0; ITEMS[id].pct=pct>0?Math.round(pct*10)/10:0; any=true;
-      row.querySelector(".pr").innerHTML=pct>0?`<s>${brl(base)}</s>${brl(fin)}<span class="off">−${String(Math.round(pct*10)/10).replace(".",",")}%</span>`:brl(fin);
+      row.querySelector(".pr").innerHTML=pct>0?`<s>${brl(base)}</s>${brl(fin)}<span class="off">−${String(Math.round(pct*10)/10).replace(".",",")}%</span><small class="pxn">no Pix ou dinheiro</small>`:brl(fin);
     });
     if(any) refresh();
   }catch(e){}
